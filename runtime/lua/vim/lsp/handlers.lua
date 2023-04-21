@@ -406,7 +406,7 @@ local function location_handler(_, result, ctx, config)
         return
       end
       vim.fn.setqflist({}, ' ', { title = title, items = items })
-      api.nvim_command('botright copen')
+      api.nvim_command('rightbelow copen')
     end
   else
     util.jump_to_location(result, client.offset_encoding, config.reuse_win)

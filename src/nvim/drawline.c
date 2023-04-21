@@ -422,7 +422,7 @@ size_t fill_foldcolumn(char *p, win_T *wp, foldinfo_T foldinfo, linenr_T lnum)
     } else if (first_level == 1) {
       symbol = wp->w_p_fcs_chars.foldsep;
     } else if (first_level + i <= 9) {
-      symbol = '0' + first_level + i;
+      symbol = wp->w_p_fcs_chars.foldlevel == ' ' ?  ('0' + first_level + i) : wp->w_p_fcs_chars.foldlevel;
     } else {
       symbol = '>';
     }
