@@ -2480,6 +2480,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 	  msgsep	' '		message separator 'display'
 	  eob		'~'		empty lines at the end of a buffer
 	  lastline	'@'		'display' contains lastline/truncate
+	  foldlevel     ' '             character to show instead of level nr
 
 	Any one that is omitted will fall back to the default.  For "stl" and
 	"stlnc" the space will be used when there is highlighting, '^' or '='

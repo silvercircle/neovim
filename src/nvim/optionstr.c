@@ -2016,6 +2016,7 @@ const char *set_chars_option(win_T *wp, char **varp, bool apply)
     { &wp->w_p_fcs_chars.msgsep,     "msgsep",    ' ' },
     { &wp->w_p_fcs_chars.eob,        "eob",       '~' },
     { &wp->w_p_fcs_chars.lastline,   "lastline",  '@' },
+    { &wp->w_p_fcs_chars.foldlevel,  "foldlevel", '@' }
   };
 
   struct chars_tab lcs_tab[] = {
