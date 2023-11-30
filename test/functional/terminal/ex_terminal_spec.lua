@@ -141,7 +141,13 @@ describe(':terminal', function()
   end)
 end)
 
-describe(':terminal (with fake shell)', function()
+local function test_terminal_with_fake_shell(backslash)
+  -- shell-test.c is a fake shell that prints its arguments and exits.
+  local shell_path = testprg('shell-test')
+  if backslash then
+    shell_path = shell_path:gsub('/', [[\]])
+  end
+
   local screen
 
   before_each(function()
@@ -149,7 +155,7 @@ describe(':terminal (with fake shell)', function()
     screen = Screen.new(50, 4)
     screen:attach({rgb=false})
     -- shell-test.c is a fake shell that prints its arguments and exits.
-    nvim('set_option', 'shell', testprg('shell-test'))
+    nvim('set_option', 'shell', shell_path)
     nvim('set_option', 'shellcmdflag', 'EXE')
   end)
 
@@ -160,7 +166,6 @@ describe(':terminal (with fake shell)', function()
   end
 
   it('with no argument, acts like termopen()', function()
-    skip(is_os('win'))
     terminal_with_fake_shell()
     retry(nil, 4 * screen.timeout, function()
     screen:expect([[
@@ -184,8 +189,7 @@ describe(':terminal (with fake shell)', function()
   end)
 
   it("with no argument, but 'shell' has arguments, acts like termopen()", function()
-    skip(is_os('win'))
-    nvim('set_option', 'shell', testprg('shell-test')..' -t jeff')
+    nvim('set_option', 'shell', shell_path ..' -t jeff')
     terminal_with_fake_shell()
     screen:expect([[
       ^jeff $                                            |
@@ -196,7 +200,6 @@ describe(':terminal (with fake shell)', function()
   end)
 
   it('executes a given command through the shell', function()
-    skip(is_os('win'))
     command('set shellxquote=')   -- win: avoid extra quotes
     terminal_with_fake_shell('echo hi')
     screen:expect([[
@@ -208,8 +211,7 @@ describe(':terminal (with fake shell)', function()
   end)
 
   it("executes a given command through the shell, when 'shell' has arguments", function()
-    skip(is_os('win'))
-    nvim('set_option', 'shell', testprg('shell-test')..' -t jeff')
+    nvim('set_option', 'shell', shell_path ..' -t jeff')
     command('set shellxquote=')   -- win: avoid extra quotes
     terminal_with_fake_shell('echo hi')
     screen:expect([[
@@ -221,7 +223,6 @@ describe(':terminal (with fake shell)', function()
   end)
 
   it('allows quotes and slashes', function()
-    skip(is_os('win'))
     command('set shellxquote=')   -- win: avoid extra quotes
     terminal_with_fake_shell([[echo 'hello' \ "world"]])
     screen:expect([[
@@ -258,7 +259,6 @@ describe(':terminal (with fake shell)', function()
   end)
 
   it('works with :find', function()
-    skip(is_os('win'))
     terminal_with_fake_shell()
     screen:expect([[
       ^ready $                                           |
@@ -277,7 +277,6 @@ describe(':terminal (with fake shell)', function()
   end)
 
   it('works with gf', function()
-    skip(is_os('win'))
     command('set shellxquote=')   -- win: avoid extra quotes
     terminal_with_fake_shell([[echo "scripts/shadacat.py"]])
     retry(nil, 4 * screen.timeout, function()
@@ -304,4 +303,13 @@ describe(':terminal (with fake shell)', function()
       terminal]])
     end
   end)
+end
+
+describe(':terminal (with fake shell)', function()
+  test_terminal_with_fake_shell(false)
+  if is_os('win') then
+    describe("when 'shell' uses backslashes", function()
+      test_terminal_with_fake_shell(true)
+    end)
+  end
 end)
