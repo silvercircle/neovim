@@ -119,14 +119,7 @@ set(NVIM_API_LEVEL 11)         # Bump this after any API change.
 set(NVIM_API_LEVEL_COMPAT 0)  # Adjust this after a _breaking_ API change.
 set(NVIM_API_PRERELEASE false)
 
-# Default to -O2 on release builds.
-if(CMAKE_C_FLAGS_RELEASE MATCHES "-O3")
-  message(STATUS "Replacing -O3 in CMAKE_C_FLAGS_RELEASE with -O2")
-  string(REPLACE "-O3" "-O2" CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
-endif()
-
 # Build-type: RelWithDebInfo
-
 # /Og means something different in MSVC
 if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
    set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} -Og -g")
@@ -138,8 +131,6 @@ if(CMAKE_C_FLAGS_RELWITHDEBINFO MATCHES DNDEBUG)
   string(REPLACE "  " " " CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO}") # Remove duplicate whitespace
 endif()
 
-option(LOG_LIST_ACTIONS "Add list actions logging" OFF)
-
 option(ENABLE_ASAN_UBSAN "Enable Clang address & undefined behavior sanitizer for nvim binary." OFF)
 option(LOG_DEBUG "Enable debug log messages even in a release build" OFF)
 option(ENABLE_MSAN "Enable Clang memory sanitizer for nvim binary." OFF)
@@ -149,12 +140,6 @@ if((ENABLE_ASAN_UBSAN AND ENABLE_MSAN)
     OR (ENABLE_ASAN_UBSAN AND ENABLE_TSAN)
     OR (ENABLE_MSAN AND ENABLE_TSAN))
   message(FATAL_ERROR "Sanitizers cannot be enabled simultaneously")
-endif()
-
-if(ENABLE_ASAN_UBSAN OR ENABLE_MSAN OR ENABLE_TSAN)
-  if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_C_COMPILER_ID MATCHES "GNU")
-    message(FATAL_ERROR "Sanitizers are only supported for Clang and GCC")
-  endif()
 endif()
 
 # Place targets in bin/ or lib/ for all build configurations
