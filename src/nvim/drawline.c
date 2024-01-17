@@ -437,7 +437,9 @@ void fill_foldcolumn(win_T *wp, foldinfo_T foldinfo, linenr_T lnum, int attr, in
     } else if (first_level == 1) {
       symbol = wp->w_p_fcs_chars.foldsep;
     } else if (first_level + i <= 9) {
-      symbol = schar_from_ascii('0' + first_level + i);
+      // symbol = '0' + first_level + i;
+      symbol = wp->w_p_fcs_chars.foldlevel == ' ' ?  schar_from_ascii('0' + first_level + i) : wp->w_p_fcs_chars.foldlevel;
+      //symbol = schar_from_ascii('0' + first_level + i);
     } else {
       symbol = schar_from_ascii('>');
     }

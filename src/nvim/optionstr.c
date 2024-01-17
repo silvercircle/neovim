@@ -2651,6 +2651,7 @@ static const struct chars_tab fcs_tab[] = {
   { &fcs_chars.msgsep,     "msgsep",    " ", NULL },
   { &fcs_chars.eob,        "eob",       "~", NULL },
   { &fcs_chars.lastline,   "lastline",  "@", NULL },
+  { &fcs_chars.foldlevel,  "foldlevel", " ", NULL }
 };
 
 static lcs_chars_T lcs_chars;
