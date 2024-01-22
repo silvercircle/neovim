@@ -137,6 +137,8 @@ The following new APIs and features were added.
   • Treesitter highlighting now parses injections incrementally during
     screen redraws only for the line range being rendered. This significantly
     improves performance in large files with many injections.
+  • 'breakindent' performance is significantly improved for wrapped lines.
+  • Cursor movement, insertion with [count] and |screenpos()| are now faster.
 
 • |vim.iter()| provides a generic iterator interface for tables and Lua
   iterators |for-in|.
@@ -151,6 +153,9 @@ The following new APIs and features were added.
 • |nvim_buf_set_extmark()| supports inline virtual text.
 
 • 'foldtext' now supports virtual text format. |fold-foldtext|
+
+• |'foldtext'| can be set to an empty string to disable and render the line:
+  as normal with regular highlighting and no line wrapping.
 
 • The terminal buffer now supports reflow (wrapped lines adapt when the buffer
   is resized horizontally). Note: Lines that are not visible and kept in

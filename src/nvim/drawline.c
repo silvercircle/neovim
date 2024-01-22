@@ -946,6 +946,10 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
   static char *at_end_str = "";       // used for p_extra when displaying curwin->w_p_lcs_chars.eol
                                       // at end-of-line
   const bool has_fold = foldinfo.fi_level != 0 && foldinfo.fi_lines > 0;
+  const bool has_foldtext = has_fold && *wp->w_p_fdt != NUL;
+
+  const bool is_wrapped = wp->w_p_wrap
+                          && !has_fold;       // Never wrap folded lines
 
   int saved_attr2 = 0;                  // char_attr saved for n_attr
   int n_attr3 = 0;                      // chars with overruling special attr
@@ -1038,7 +1042,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
     // trailing white space and/or syntax processing to be done.
     extra_check = wp->w_p_lbr;
     if (syntax_present(wp) && !wp->w_s->b_syn_error && !wp->w_s->b_syn_slow
-        && !has_fold && !end_fill) {
+        && !has_foldtext && !end_fill) {
       // Prepare for syntax highlighting in this line.  When there is an
       // error, stop syntax highlighting.
       int save_did_emsg = did_emsg;
@@ -1134,7 +1138,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
       // handle 'incsearch' and ":s///c" highlighting
     } else if (highlight_match
                && wp == curwin
-               && !has_fold
+               && !has_foldtext
                && lnum >= curwin->w_cursor.lnum
                && lnum <= curwin->w_cursor.lnum + search_match_lines) {
       if (lnum == curwin->w_cursor.lnum) {
@@ -1194,7 +1198,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
       // Do not show the cursor line in the text when Visual mode is active,
       // because it's not clear what is selected then.
       && !(wp == curwin && VIsual_active)) {
-    cul_screenline = (wp->w_p_wrap && (wp->w_p_culopt_flags & CULOPT_SCRLINE));
+    cul_screenline = (is_wrapped && (wp->w_p_culopt_flags & CULOPT_SCRLINE));
     if (!cul_screenline) {
       apply_cursorline_highlight(wp, &wlv);
     } else {
@@ -1317,7 +1321,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
   const schar_T lcs_eol = wp->w_p_lcs_chars.eol;  // 'eol' value
   schar_T lcs_prec_todo = wp->w_p_lcs_chars.prec;  // 'prec' until it's been used, then NUL
 
-  if (wp->w_p_list && !has_fold && !end_fill) {
+  if (wp->w_p_list && !has_foldtext && !end_fill) {
     if (wp->w_p_lcs_chars.space
         || wp->w_p_lcs_chars.multispace != NULL
         || wp->w_p_lcs_chars.leadmultispace != NULL
@@ -1338,30 +1342,30 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
 
   if (start_col > 0 && col_rows == 0) {
     char *prev_ptr = ptr;
-    chartabsize_T cts;
-    int charsize = 0;
-    int head = 0;
+    CharSize cs = { 0 };
 
-    init_chartabsize_arg(&cts, wp, lnum, wlv.vcol, line, ptr);
-    cts.cts_max_head_vcol = start_col;
-    while (cts.cts_vcol < start_col && *cts.cts_ptr != NUL) {
-      head = 0;
-      charsize = win_lbr_chartabsize(&cts, &head);
-      cts.cts_vcol += charsize;
-      prev_ptr = cts.cts_ptr;
-      MB_PTR_ADV(cts.cts_ptr);
+    CharsizeArg csarg;
+    CSType cstype = init_charsize_arg(&csarg, wp, lnum, line);
+    csarg.max_head_vcol = start_col;
+    int vcol = wlv.vcol;
+    StrCharInfo ci = utf_ptr2StrCharInfo(ptr);
+    while (vcol < start_col && *ci.ptr != NUL) {
+      cs = win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &csarg);
+      vcol += cs.width;
+      prev_ptr = ci.ptr;
+      ci = utfc_next(ci);
       if (wp->w_p_list) {
-        in_multispace = *prev_ptr == ' ' && (*cts.cts_ptr == ' '
+        in_multispace = *prev_ptr == ' ' && (*ci.ptr == ' '
                                              || (prev_ptr > line && prev_ptr[-1] == ' '));
         if (!in_multispace) {
           multispace_pos = 0;
-        } else if (cts.cts_ptr >= line + leadcol
+        } else if (ci.ptr >= line + leadcol
                    && wp->w_p_lcs_chars.multispace != NULL) {
           multispace_pos++;
           if (wp->w_p_lcs_chars.multispace[multispace_pos] == NUL) {
             multispace_pos = 0;
           }
-        } else if (cts.cts_ptr < line + leadcol
+        } else if (ci.ptr < line + leadcol
                    && wp->w_p_lcs_chars.leadmultispace != NULL) {
           multispace_pos++;
           if (wp->w_p_lcs_chars.leadmultispace[multispace_pos] == NUL) {
@@ -1370,9 +1374,10 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
         }
       }
     }
-    wlv.vcol = cts.cts_vcol;
-    ptr = cts.cts_ptr;
-    clear_chartabsize_arg(&cts);
+    wlv.vcol = vcol;
+    ptr = ci.ptr;
+    int charsize = cs.width;
+    int head = cs.head;
 
     // When:
     // - 'cuc' is set, or
@@ -1468,7 +1473,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
     }
   }
 
-  if (col_rows == 0 && !has_fold && !end_fill) {
+  if (col_rows == 0 && !has_foldtext && !end_fill) {
     const int v = (int)(ptr - line);
     area_highlighting |= prepare_search_hl_line(wp, lnum, v,
                                                 &line, &screen_search_hl, &search_attr,
@@ -1606,6 +1611,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
     const bool draw_folded = has_fold && wlv.row == startrow + wlv.filler_lines;
     if (draw_folded && wlv.n_extra == 0) {
       wlv.char_attr = folded_attr = win_hl_attr(wp, HLF_FL);
+      decor_attr = 0;
     }
 
     int extmark_attr = 0;
@@ -1641,7 +1647,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
                                           &decor_state);
         }
 
-        if (!has_fold && wp->w_buffer->b_virt_text_inline > 0) {
+        if (!has_foldtext && wp->w_buffer->b_virt_text_inline > 0) {
           handle_inline_virtual_text(wp, &wlv, ptr - line);
           if (wlv.n_extra > 0 && wlv.virt_inline_hl_mode <= kHlModeReplace) {
             // restore search_attr and area_attr when n_extra is down to zero
@@ -1680,7 +1686,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
         area_active = false;
       }
 
-      if (!has_fold && wlv.n_extra == 0) {
+      if (!has_foldtext && wlv.n_extra == 0) {
         // Check for start/end of 'hlsearch' and other matches.
         // After end, check for start/end of next match.
         // When another match, have to check for start again.
@@ -1747,7 +1753,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
       }
     }
 
-    if (draw_folded && wlv.n_extra == 0 && wlv.col == win_col_offset) {
+    if (draw_folded && has_foldtext && wlv.n_extra == 0 && wlv.col == win_col_offset) {
       const int v = (int)(ptr - line);
       linenr_T lnume = lnum + foldinfo.fi_lines - 1;
       memset(buf_fold, ' ', FOLD_TEXT_LEN);
@@ -1766,7 +1772,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
       ptr = line + v;
     }
 
-    if (draw_folded && wlv.n_extra == 0 && wlv.col < grid->cols) {
+    if (draw_folded && wlv.n_extra == 0 && wlv.col < grid->cols && (has_foldtext || *ptr == NUL)) {
       // Fill rest of line with 'fold'.
       wlv.sc_extra = wp->w_p_fcs_chars.fold;
       wlv.sc_final = NUL;
@@ -1849,7 +1855,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
       // initialize these.
       mb_c = ' ';
       mb_schar = schar_from_ascii(' ');
-    } else if (has_fold) {
+    } else if (has_foldtext || (has_fold && wlv.col >= grid->cols)) {
       // skip writing the buffer line itself
       mb_schar = NUL;
     } else {
@@ -1975,6 +1981,10 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
           can_spell = TRISTATE_TO_BOOL(decor_state.spell, can_spell);
         }
 
+        if (folded_attr) {
+          decor_attr = hl_combine_attr(folded_attr, decor_attr);
+        }
+
         if (decor_attr) {
           if (!attr_pri) {
             if (wlv.cul_attr) {
@@ -2083,13 +2093,12 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
             && vim_isbreak(mb_c) && !vim_isbreak((uint8_t)(*ptr))) {
           int mb_off = utf_head_off(line, ptr - 1);
           char *p = ptr - (mb_off + 1);
-          chartabsize_T cts;
 
-          init_chartabsize_arg(&cts, wp, lnum, wlv.vcol, line, p);
-          // do not want virtual text to be counted here
-          cts.cts_has_virt_text = false;
-          wlv.n_extra = win_lbr_chartabsize(&cts, NULL) - 1;
-          clear_chartabsize_arg(&cts);
+          CharsizeArg csarg;
+          // lnum == 0, do not want virtual text to be counted here
+          CSType cstype = init_charsize_arg(&csarg, wp, 0, line);
+          wlv.n_extra = win_charsize(cstype, wlv.vcol, p, utf_ptr2CharInfo(p).value,
+                                     &csarg).width - 1;
 
           if (on_last_col && mb_c != TAB) {
             // Do not continue search/match highlighting over the
@@ -2390,7 +2399,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
             wlv.vcol_off += wlv.n_extra;
           }
           wlv.vcol += wlv.n_extra;
-          if (wp->w_p_wrap && wlv.n_extra > 0) {
+          if (is_wrapped && wlv.n_extra > 0) {
             wlv.boguscols += wlv.n_extra;
             wlv.col += wlv.n_extra;
           }
@@ -2491,7 +2500,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
           // Add a blank character to highlight.
           linebuf_char[wlv.off] = schar_from_ascii(' ');
         }
-        if (area_attr == 0 && !has_fold) {
+        if (area_attr == 0 && !has_foldtext) {
           // Use attributes from match with highest priority among
           // 'search_hl' and the match list.
           get_search_match_hl(wp,
@@ -2618,7 +2627,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
       }
 
       // When the window is too narrow draw all "@" lines.
-      if (leftcols_width >= wp->w_grid.cols && wp->w_p_wrap) {
+      if (leftcols_width >= wp->w_grid.cols && is_wrapped) {
         win_draw_end(wp, schar_from_ascii('@'), true, wlv.row, wp->w_grid.rows, HLF_AT);
         set_empty_rows(wp, wlv.row);
         wlv.row = endrow;
@@ -2629,12 +2638,13 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
 
     // Show "extends" character from 'listchars' if beyond the line end and
     // 'list' is set.
+    // Don't show this with 'wrap' as the line can't be scrolled horizontally.
     if (wp->w_p_lcs_chars.ext != NUL
         && wp->w_p_list
         && !wp->w_p_wrap
         && wlv.filler_todo <= 0
         && wlv.col == grid->cols - 1
-        && !has_fold) {
+        && !has_foldtext) {
       if (has_decor && *ptr == NUL && lcs_eol == 0 && lcs_eol_todo) {
         // Tricky: there might be a virtual text just _after_ the last char
         decor_redraw_col(wp, (colnr_T)(ptr - line), wlv.off, false, &decor_state);
@@ -2716,7 +2726,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
       if (wlv.n_extra > 0) {
         wlv.vcol_off += wlv.n_extra;
       }
-      if (wp->w_p_wrap) {
+      if (is_wrapped) {
         // Special voodoo required if 'wrap' is on.
         //
         // Advance the column indicator to force the line
@@ -2784,11 +2794,11 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
     if (has_decor && wlv.filler_todo <= 0 && wlv.col >= grid->cols) {
       // At the end of screen line: might need to peek for decorations just after
       // this position.
-      if (!has_fold && wp->w_p_wrap && wlv.n_extra == 0) {
+      if (is_wrapped && wlv.n_extra == 0) {
         decor_redraw_col(wp, (colnr_T)(ptr - line), -3, false, &decor_state);
         // Check position/hiding of virtual text again on next screen line.
         decor_need_recheck = true;
-      } else if (has_fold || !wp->w_p_wrap) {
+      } else if (!is_wrapped) {
         // Without wrapping, we might need to display right_align and win_col
         // virt_text for the entire text line.
         decor_redraw_col(wp, MAXCOL, -1, true, &decor_state);
@@ -2797,14 +2807,14 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
 
     // At end of screen line and there is more to come: Display the line
     // so far.  If there is no more to display it is caught above.
-    if (wlv.col >= grid->cols && (!has_fold || virt_line_offset >= 0)
+    if (wlv.col >= grid->cols && (!has_foldtext || virt_line_offset >= 0)
         && (*ptr != NUL
             || wlv.filler_todo > 0
             || (wp->w_p_list && wp->w_p_lcs_chars.eol != NUL
                 && wlv.p_extra != at_end_str)
             || (wlv.n_extra != 0 && (wlv.sc_extra != NUL || *wlv.p_extra != NUL))
             || has_more_inline_virt(&wlv, ptr - line))) {
-      const bool wrap = wp->w_p_wrap                  // Wrapping enabled.
+      const bool wrap = is_wrapped                    // Wrapping enabled (not a folded line).
                         && wlv.filler_todo <= 0       // Not drawing diff filler lines.
                         && lcs_eol_todo               // Haven't printed the lcs_eol character.
                         && wlv.row != endrow - 1      // Not the last line being displayed.
@@ -2837,7 +2847,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
 
       // When not wrapping and finished diff lines, or when displayed
       // '$' and highlighting until last column, break here.
-      if ((!wp->w_p_wrap && wlv.filler_todo <= 0) || !lcs_eol_todo) {
+      if ((!is_wrapped && wlv.filler_todo <= 0) || !lcs_eol_todo) {
         break;
       }
 
