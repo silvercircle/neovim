@@ -251,9 +251,9 @@ function module.set_method_error(err)
 end
 
 --- @param lsession test.Session
---- @param request_cb function
---- @param notification_cb function
---- @param setup_cb function
+--- @param request_cb function?
+--- @param notification_cb function?
+--- @param setup_cb function?
 --- @param timeout integer
 --- @return {[1]: integer, [2]: string}
 function module.run_session(lsession, request_cb, notification_cb, setup_cb, timeout)
@@ -642,6 +642,8 @@ function module.set_shell_powershell(fake)
   return found
 end
 
+---@param func function
+---@return table<string,function>
 function module.create_callindex(func)
   return setmetatable({}, {
     --- @param tbl table<any,function>
@@ -932,17 +934,14 @@ function module.new_pipename()
 end
 
 --- @param provider string
---- @return string|false?
+--- @return string|boolean?
 function module.missing_provider(provider)
   if provider == 'ruby' or provider == 'node' or provider == 'perl' then
     --- @type string?
     local e = module.fn['provider#' .. provider .. '#Detect']()[2]
     return e ~= '' and e or false
-  elseif provider == 'python' or provider == 'python3' then
-    local py_major_version = (provider == 'python3' and 3 or 2)
-    --- @type string?
-    local e = module.fn['provider#pythonx#Detect'](py_major_version)[2]
-    return e ~= '' and e or false
+  elseif provider == 'python' then
+    return module.exec_lua([[return {require('vim.provider.python').detect_by_module('neovim')}]])[2]
   end
   assert(false, 'Unknown provider: ' .. provider)
 end
