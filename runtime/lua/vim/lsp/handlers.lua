@@ -441,7 +441,7 @@ local function location_handler(_, result, ctx, config)
     return
   end
   vim.fn.setqflist({}, ' ', { title = title, items = items })
-  api.nvim_command('rightbelow copen')
+  api.nvim_command('botright copen')
 end
 
 --see: https://microsoft.github.io/language-server-protocol/specifications/specification-current/#textDocument_declaration
