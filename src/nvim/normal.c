@@ -375,7 +375,7 @@ static int nv_compare(const void *s1, const void *s2)
   if (c2 < 0) {
     c2 = -c2;
   }
-  return c1 - c2;
+  return c1 == c2 ? 0 : c1 > c2 ? 1 : -1;
 }
 
 /// Initialize the nv_cmd_idx[] table.
@@ -1451,9 +1451,7 @@ static int normal_check(VimState *state)
     // has been done, close any file for startup messages.
     if (time_fd != NULL) {
       TIME_MSG("first screen update");
-      TIME_MSG("--- NVIM STARTED ---");
-      fclose(time_fd);
-      time_fd = NULL;
+      time_finish();
     }
     // After the first screen update may start triggering WinScrolled
     // autocmd events.  Store all the scroll positions and sizes now.

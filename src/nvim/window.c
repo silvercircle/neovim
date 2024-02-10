@@ -796,7 +796,7 @@ void ui_ext_win_position(win_T *wp, bool validate)
 
     wp->w_grid_alloc.zindex = wp->w_float_config.zindex;
     if (ui_has(kUIMultigrid)) {
-      String anchor = cstr_as_string((char *)float_anchor_str[c.anchor]);
+      String anchor = cstr_as_string(float_anchor_str[c.anchor]);
       if (!c.hide) {
         ui_call_win_float_pos(wp->w_grid_alloc.handle, wp->handle, anchor,
                               grid->handle, row, col, c.focusable,
@@ -7359,9 +7359,17 @@ static bool frame_check_width(const frame_T *topfrp, int width)
 }
 
 /// Simple int comparison function for use with qsort()
-static int int_cmp(const void *a, const void *b)
+static int int_cmp(const void *pa, const void *pb)
 {
-  return *(const int *)a - *(const int *)b;
+  const int a = *(const int *)pa;
+  const int b = *(const int *)pb;
+  if (a > b) {
+    return 1;
+  }
+  if (a < b) {
+    return -1;
+  }
+  return 0;
 }
 
 /// Handle setting 'colorcolumn' or 'textwidth' in window "wp".
