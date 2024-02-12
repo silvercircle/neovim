@@ -2230,6 +2230,44 @@ describe('extmark decorations', function()
     ]]}
   end)
 
+  it('virtual text is drawn correctly after delete and undo #27368', function()
+    insert('aaa\nbbb\nccc\nddd\neee')
+    command('vsplit')
+    api.nvim_buf_set_extmark(0, ns, 2, 0, { virt_text = {{'EOL'}} })
+    feed('3gg')
+    screen:expect{grid=[[
+      aaa                      │aaa                     |
+      bbb                      │bbb                     |
+      ^ccc EOL                  │ccc EOL                 |
+      ddd                      │ddd                     |
+      eee                      │eee                     |
+      {1:~                        }│{1:~                       }|*8
+      {41:[No Name] [+]             }{40:[No Name] [+]           }|
+                                                        |
+    ]]}
+    feed('dd')
+    screen:expect{grid=[[
+      aaa                      │aaa                     |
+      bbb                      │bbb                     |
+      ^ddd EOL                  │ddd EOL                 |
+      eee                      │eee                     |
+      {1:~                        }│{1:~                       }|*9
+      {41:[No Name] [+]             }{40:[No Name] [+]           }|
+                                                        |
+    ]]}
+    command('silent undo')
+    screen:expect{grid=[[
+      aaa                      │aaa                     |
+      bbb                      │bbb                     |
+      ^ccc EOL                  │ccc EOL                 |
+      ddd                      │ddd                     |
+      eee                      │eee                     |
+      {1:~                        }│{1:~                       }|*8
+      {41:[No Name] [+]             }{40:[No Name] [+]           }|
+                                                        |
+    ]]}
+  end)
+
   it('works with both hl_group and sign_hl_group', function()
     screen:try_resize(screen._width, 3)
     insert('abcdefghijklmn')
@@ -3882,16 +3920,31 @@ if (h->n_buckets < new_n_buckets) { // expand
 
   it('works with one line', function()
     insert(example_text2)
-    feed 'gg'
+    feed '2gg'
+    screen:expect{grid=[[
+      if (h->n_buckets < new_n_buckets) { // expand     |
+        ^khkey_t *new_keys = (khkey_t *)krealloc((void *)|
+      h->keys, new_n_buckets * sizeof(khkey_t));        |
+        h->keys = new_keys;                             |
+        if (kh_is_map && val_size) {                    |
+          char *new_vals = krealloc( h->vals_buf, new_n_|
+      buckets * val_size);                              |
+          h->vals_buf = new_vals;                       |
+        }                                               |
+      }                                                 |
+      {1:~                                                 }|
+                                                        |
+    ]]}
+
     api.nvim_buf_set_extmark(0, ns, 1, 33, {
       virt_lines={ {{">> ", "NonText"}, {"krealloc", "Identifier"}, {": change the size of an allocation"}}};
       virt_lines_above=true;
     })
 
     screen:expect{grid=[[
-      ^if (h->n_buckets < new_n_buckets) { // expand     |
+      if (h->n_buckets < new_n_buckets) { // expand     |
       {1:>> }{2:krealloc}: change the size of an allocation     |
-        khkey_t *new_keys = (khkey_t *)krealloc((void *)|
+        ^khkey_t *new_keys = (khkey_t *)krealloc((void *)|
       h->keys, new_n_buckets * sizeof(khkey_t));        |
         h->keys = new_keys;                             |
         if (kh_is_map && val_size) {                    |
@@ -3955,7 +4008,6 @@ if (h->n_buckets < new_n_buckets) { // expand
     api.nvim_buf_set_extmark(0, ns, 5, 0, {
       virt_lines = { {{"^^ REVIEW:", "Todo"}, {" new_vals variable seems unnecessary?", "Comment"}} };
     })
-    -- TODO: what about the cursor??
     screen:expect{grid=[[
       if (h->n_buckets < new_n_buckets) { // expand     |
         khkey_t *new_keys = (khkey_t *)                 |
@@ -3972,7 +4024,6 @@ if (h->n_buckets < new_n_buckets) { // expand
     ]]}
 
     api.nvim_buf_clear_namespace(0, ns, 0, -1)
-    -- Cursor should be drawn on the correct line. #22704
     screen:expect{grid=[[
       if (h->n_buckets < new_n_buckets) { // expand     |
         khkey_t *new_keys = (khkey_t *)                 |
@@ -4604,22 +4655,24 @@ if (h->n_buckets < new_n_buckets) { // expand
     ]]}
 
     feed('gg')
-    feed('dd')
+    feed('yyp')
     screen:expect{grid=[[
-      ^line2                                             |
+      line1                                             |
       foo                                               |
       bar                                               |
       baz                                               |
+      ^line1                                             |
+      line2                                             |
       line3                                             |
       line4                                             |
       line5                                             |
-      {1:~                                                 }|*4
+      {1:~                                                 }|*2
                                                         |
     ]]}
 
-    feed('yyp')
+    feed('dd')
     screen:expect{grid=[[
-      line2                                             |
+      line1                                             |
       foo                                               |
       bar                                               |
       baz                                               |
@@ -4630,6 +4683,19 @@ if (h->n_buckets < new_n_buckets) { // expand
       {1:~                                                 }|*3
                                                         |
     ]]}
+
+    feed('kdd')
+    screen:expect([[
+      ^line2                                             |
+      foo                                               |
+      bar                                               |
+      baz                                               |
+      line3                                             |
+      line4                                             |
+      line5                                             |
+      {1:~                                                 }|*4
+                                                        |
+    ]])
   end)
 
 end)
@@ -5158,6 +5224,18 @@ l5
       S1{4:^a}                 |
       {2:~                   }|*2
                           |
+    ]]}
+  end)
+
+  it('correct sort order with multiple namespaces and same id', function()
+    local ns2 = api.nvim_create_namespace('')
+    api.nvim_buf_set_extmark(0, ns, 0, 0, {sign_text = 'S1', id = 1})
+    api.nvim_buf_set_extmark(0, ns2, 0, 0, {sign_text = 'S2', id = 1})
+
+    screen:expect{grid=[[
+      S1S2^                                              |
+      {2:~                                                 }|*8
+                                                        |
     ]]}
   end)
 end)
