@@ -322,8 +322,15 @@ static void changed_common(buf_T *buf, linenr_T lnum, colnr_T col, linenr_T lnum
   FOR_ALL_TAB_WINDOWS(tp, wp) {
     if (wp->w_buffer == buf) {
       // Mark this window to be redrawn later.
-      if (wp->w_redr_type < UPD_VALID) {
+      if (!redraw_not_allowed && wp->w_redr_type < UPD_VALID) {
         wp->w_redr_type = UPD_VALID;
+      }
+
+      // When inserting/deleting lines and the window has specific lines
+      // to be redrawn, w_redraw_top and w_redraw_bot may now be invalid,
+      // so just redraw everything.
+      if (xtra != 0 && wp->w_redraw_top != 0) {
+        redraw_later(wp, UPD_NOT_VALID);
       }
 
       linenr_T last = lnume + xtra - 1;  // last line after the change
@@ -390,9 +397,7 @@ static void changed_common(buf_T *buf, linenr_T lnum, colnr_T col, linenr_T lnum
 
   // Call update_screen() later, which checks out what needs to be redrawn,
   // since it notices b_mod_set and then uses b_mod_*.
-  if (must_redraw < UPD_VALID) {
-    must_redraw = UPD_VALID;
-  }
+  set_must_redraw(UPD_VALID);
 
   // when the cursor line is changed always trigger CursorMoved
   if (last_cursormoved_win == curwin && curwin->w_buffer == buf
