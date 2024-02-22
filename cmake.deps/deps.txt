@@ -16,8 +16,8 @@ UNIBILIUM_SHA256 9c4747c862ab5e3076dcf8fa8f0ea7a6b50f20ec5905618b953665559679748
 LIBVTERM_URL https://github.com/neovim/libvterm/archive/v0.3.3.tar.gz
 LIBVTERM_SHA256 0babe3ab42c354925dadede90d352f054aa9c4ae6842ea803a20c9741e172e56
 
-LUV_URL https://github.com/luvit/luv/archive/1.47.0-0.tar.gz
-LUV_SHA256 f9911d9d33808514e9ddc1e74667a57c427efa14fefecfa5fabe80ce95a3150a
+LUV_URL https://github.com/luvit/luv/archive/v1.48.0-0.tar.gz
+LUV_SHA256 c9c12e414f8045aea11e5dbb44cd6c68196c10e02e1294dad971c367976cc1f9
 
 LPEG_URL https://github.com/neovim/deps/raw/d495ee6f79e7962a53ad79670cb92488abe0b9b4/opt/lpeg-1.1.0.tar.gz
 LPEG_SHA256 4b155d67d2246c1ffa7ad7bc466c1ea899bbc40fef0257cc9c03cecbaed4352a
@@ -57,5 +57,5 @@ TREESITTER_BASH_URL https://github.com/tree-sitter/tree-sitter-bash/archive/v0.2
 TREESITTER_BASH_SHA256 7bba80ac64a18ec1b3f47e738e6a168f065c3cb4244234eff1b773816008f5a7
 TREESITTER_MARKDOWN_URL https://github.com/MDeiml/tree-sitter-markdown/archive/v0.1.7.tar.gz
 TREESITTER_MARKDOWN_SHA256 7d0e7f7ed4516ed0816f9c304e2e7fa93b2c16f9280416c2fb64dc4efd9c5f83
-TREESITTER_URL https://github.com/tree-sitter/tree-sitter/archive/v0.20.9.tar.gz
-TREESITTER_SHA256 9b2fd489a7281e3a7e5e7cbbf3a974e5a6a115889ae65676d61b79bdae96464e
+TREESITTER_URL https://github.com/tree-sitter/tree-sitter/archive/v0.21.0.tar.gz
+TREESITTER_SHA256 6bb60e5b63c1dc18aba57a9e7b3ea775b4f9ceec44cc35dac4634d26db4eb69c
