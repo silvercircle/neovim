@@ -675,13 +675,26 @@ local function get_bufs_with_prefix(prefix)
   return buffers
 end
 
+local function escape_gsub_repl(s)
+  return (s:gsub('%%', '%%%%'))
+end
+
+--- @class vim.lsp.util.rename.Opts
+--- @inlinedoc
+--- @field overwrite? boolean
+--- @field ignoreIfExists? boolean
+
 --- Rename old_fname to new_fname
 ---
----@param old_fname string
----@param new_fname string
----@param opts? table options
----        - overwrite? boolean
----        - ignoreIfExists? boolean
+--- Existing buffers are renamed as well, while maintaining their bufnr.
+---
+--- It deletes existing buffers that conflict with the renamed file name only when
+--- * `opts` requests overwriting; or
+--- * the conflicting buffers are not loaded, so that deleting thme does not result in data loss.
+---
+--- @param old_fname string
+--- @param new_fname string
+--- @param opts? vim.lsp.util.rename.Opts Options:
 function M.rename(old_fname, new_fname, opts)
   opts = opts or {}
   local skip = not opts.overwrite or opts.ignoreIfExists
@@ -698,24 +711,36 @@ function M.rename(old_fname, new_fname, opts)
     return
   end
 
-  local oldbufs = {}
-  local win = nil
-
-  if vim.fn.isdirectory(old_fname_full) == 1 then
-    oldbufs = get_bufs_with_prefix(old_fname_full)
-  else
-    local oldbuf = vim.fn.bufadd(old_fname_full)
-    table.insert(oldbufs, oldbuf)
-    win = vim.fn.win_findbuf(oldbuf)[1]
-  end
-
-  for _, b in ipairs(oldbufs) do
-    -- There may be pending changes in the buffer
-    if api.nvim_buf_is_loaded(b) then
-      api.nvim_buf_call(b, function()
-        vim.cmd('update!')
-      end)
+  local buf_rename = {} ---@type table<integer, {from: string, to: string}>
+  local old_fname_pat = '^' .. vim.pesc(old_fname_full)
+  for b in
+    vim.iter(get_bufs_with_prefix(old_fname_full)):filter(function(b)
+      -- No need to care about unloaded or nofile buffers. Also :saveas won't work for them.
+      return api.nvim_buf_is_loaded(b)
+        and not vim.list_contains({ 'nofile', 'nowrite' }, vim.bo[b].buftype)
+    end)
+  do
+    -- Renaming a buffer may conflict with another buffer that happens to have the same name. In
+    -- most cases, this would have been already detected by the file conflict check above, but the
+    -- conflicting buffer may not be associated with a file. For example, 'buftype' can be "nofile"
+    -- or "nowrite", or the buffer can be a normal buffer but has not been written to the file yet.
+    -- Renaming should fail in such cases to avoid losing the contents of the conflicting buffer.
+    local old_bname = vim.api.nvim_buf_get_name(b)
+    local new_bname = old_bname:gsub(old_fname_pat, escape_gsub_repl(new_fname))
+    if vim.fn.bufexists(new_bname) == 1 then
+      local existing_buf = vim.fn.bufnr(new_bname)
+      if api.nvim_buf_is_loaded(existing_buf) and skip then
+        vim.notify(
+          new_bname .. ' already exists in the buffer list. Skipping rename.',
+          vim.log.levels.ERROR
+        )
+        return
+      end
+      -- no need to preserve if such a buffer is empty
+      api.nvim_buf_delete(existing_buf, {})
     end
+
+    buf_rename[b] = { from = old_bname, to = new_bname }
   end
 
   local newdir = assert(vim.fs.dirname(new_fname))
@@ -724,17 +749,23 @@ function M.rename(old_fname, new_fname, opts)
   local ok, err = os.rename(old_fname_full, new_fname)
   assert(ok, err)
 
-  if vim.fn.isdirectory(new_fname) == 0 then
-    local newbuf = vim.fn.bufadd(new_fname)
-    if win then
-      vim.fn.bufload(newbuf)
-      vim.bo[newbuf].buflisted = true
-      api.nvim_win_set_buf(win, newbuf)
-    end
+  local old_undofile = vim.fn.undofile(old_fname_full)
+  if uv.fs_stat(old_undofile) ~= nil then
+    local new_undofile = vim.fn.undofile(new_fname)
+    vim.fn.mkdir(assert(vim.fs.dirname(new_undofile)), 'p')
+    os.rename(old_undofile, new_undofile)
   end
 
-  for _, b in ipairs(oldbufs) do
-    api.nvim_buf_delete(b, {})
+  for b, rename in pairs(buf_rename) do
+    -- Rename with :saveas. This does two things:
+    -- * Unset BF_WRITE_MASK, so that users don't get E13 when they do :write.
+    -- * Send didClose and didOpen via textDocument/didSave handler.
+    api.nvim_buf_call(b, function()
+      vim.cmd('keepalt saveas! ' .. vim.fn.fnameescape(rename.to))
+    end)
+    -- Delete the new buffer with the old name created by :saveas. nvim_buf_delete and
+    -- :bwipeout are futile because the buffer will be added again somewhere else.
+    vim.cmd('bdelete! ' .. vim.fn.bufnr(rename.from))
   end
 end
 
@@ -1443,7 +1474,7 @@ function M.stylize_markdown(bufnr, contents, opts)
   return stripped
 end
 
---- @class lsp.util.NormalizeMarkdownOptions
+--- @class (private) vim.lsp.util._normalize_markdown.Opts
 --- @field width integer Thematic breaks are expanded to this size. Defaults to 80.
 
 --- Normalizes Markdown input to a canonical form.
@@ -1459,7 +1490,7 @@ end
 ---
 ---@private
 ---@param contents string[]
----@param opts? lsp.util.NormalizeMarkdownOptions
+---@param opts? vim.lsp.util._normalize_markdown.Opts
 ---@return string[] table of lines containing normalized Markdown
 ---@see https://github.github.com/gfm
 function M._normalize_markdown(contents, opts)
@@ -1530,7 +1561,7 @@ local function close_preview_autocmd(events, winnr, bufnrs)
   end
 end
 
----@internal
+---@private
 --- Computes size of float needed to show contents (with optional wrapping)
 ---
 ---@param contents table of lines to show in window
@@ -1606,24 +1637,50 @@ function M._make_floating_popup_size(contents, opts)
   return width, height
 end
 
+--- @class vim.lsp.util.open_floating_preview.Opts
+--- @inlinedoc
+---
+--- Height of floating window
+--- @field height? integer
+---
+--- Width of floating window
+--- @field width? integer
+---
+--- Wrap long lines
+--- (default: `true`)
+--- @field wrap? boolean
+---
+--- Character to wrap at for computing height when wrap is enabled
+--- @field wrap_at? integer
+---
+--- Maximal width of floating window
+--- @field max_width? integer
+---
+--- Maximal height of floating window
+--- @field max_height? integer
+---
+--- If a popup with this id is opened, then focus it
+--- @field focus_id? string
+---
+--- List of events that closes the floating window
+--- @field close_events? table
+---
+--- Make float focusable.
+--- (default: `true`)
+--- @field focusable? boolean
+---
+--- If `true`, and if {focusable} is also `true`, focus an existing floating
+--- window with the same {focus_id}
+--- (default: `true`)
+--- @field focus? boolean
+
 --- Shows contents in a floating window.
 ---
 ---@param contents table of lines to show in window
 ---@param syntax string of syntax to set for opened buffer
----@param opts table with optional fields (additional keys are filtered with |vim.lsp.util.make_floating_popup_options()|
----             before they are passed on to |nvim_open_win()|)
----             - height: (integer) height of floating window
----             - width: (integer) width of floating window
----             - wrap: (boolean, default true) wrap long lines
----             - wrap_at: (integer) character to wrap at for computing height when wrap is enabled
----             - max_width: (integer) maximal width of floating window
----             - max_height: (integer) maximal height of floating window
----             - focus_id: (string) if a popup with this id is opened, then focus it
----             - close_events: (table) list of events that closes the floating window
----             - focusable: (boolean, default true) Make float focusable
----             - focus: (boolean, default true) If `true`, and if {focusable}
----                      is also `true`, focus an existing floating window with the same
----                      {focus_id}
+---@param opts? vim.lsp.util.open_floating_preview.Opts with optional fields
+--- (additional keys are filtered with |vim.lsp.util.make_floating_popup_options()|
+--- before they are passed on to |nvim_open_win()|)
 ---@return integer bufnr of newly created float window
 ---@return integer winid of newly created float window preview window
 function M.open_floating_preview(contents, syntax, opts)
@@ -1787,7 +1844,8 @@ local position_sort = sort_by_key(function(v)
   return { v.start.line, v.start.character }
 end)
 
----@class vim.lsp.util.LocationItem
+---@class vim.lsp.util.locations_to_items.ret
+---@inlinedoc
 ---@field filename string
 ---@field lnum integer 1-indexed line number
 ---@field col integer 1-indexed column
@@ -1806,7 +1864,7 @@ end)
 ---@param locations lsp.Location[]|lsp.LocationLink[]
 ---@param offset_encoding string offset_encoding for locations utf-8|utf-16|utf-32
 ---                              default to first client of buffer
----@return vim.lsp.util.LocationItem[] list of items
+---@return vim.lsp.util.locations_to_items.ret[]
 function M.locations_to_items(locations, offset_encoding)
   if offset_encoding == nil then
     vim.notify_once(
@@ -2214,16 +2272,16 @@ local function make_line_range_params(bufnr, start_line, end_line, offset_encodi
   }
 end
 
----@private
---- Request updated LSP information for a buffer.
----
----@class lsp.util.RefreshOptions
+---@class (private) vim.lsp.util._refresh.Opts
 ---@field bufnr integer? Buffer to refresh (default: 0)
 ---@field only_visible? boolean Whether to only refresh for the visible regions of the buffer (default: false)
 ---@field client_id? integer Client ID to refresh (default: all clients)
---
+
+---@private
+--- Request updated LSP information for a buffer.
+---
 ---@param method string LSP method to call
----@param opts? lsp.util.RefreshOptions Options table
+---@param opts? vim.lsp.util._refresh.Opts Options table
 function M._refresh(method, opts)
   opts = opts or {}
   local bufnr = opts.bufnr
