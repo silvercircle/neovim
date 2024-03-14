@@ -30,6 +30,10 @@
 //  changed (lines appended/deleted/changed) or when it is flushed it gets a
 //  positive number. Use mf_trans_del() to get the new number, before calling
 //  mf_get().
+//
+// "Mom, can we get ropes?"
+// "We have ropes at home."
+// Ropes at home:
 
 #include <assert.h>
 #include <errno.h>
@@ -1838,6 +1842,12 @@ char *ml_get_pos(const pos_T *pos)
 colnr_T ml_get_len(linenr_T lnum)
 {
   return ml_get_buf_len(curbuf, lnum);
+}
+
+/// @return  length (excluding the NUL) of the text after position "pos".
+colnr_T ml_get_pos_len(pos_T *pos)
+{
+  return ml_get_buf_len(curbuf, pos->lnum) - pos->col;
 }
 
 /// @return  length (excluding the NUL) of the given line in the given buffer.
@@ -4133,7 +4143,7 @@ int dec(pos_T *lp)
   if (lp->col == MAXCOL) {
     // past end of line
     char *p = ml_get(lp->lnum);
-    lp->col = (colnr_T)strlen(p);
+    lp->col = ml_get_len(lp->lnum);
     lp->col -= utf_head_off(p, p + lp->col);
     return 0;
   }
@@ -4149,7 +4159,7 @@ int dec(pos_T *lp)
     // there is a prior line
     lp->lnum--;
     char *p = ml_get(lp->lnum);
-    lp->col = (colnr_T)strlen(p);
+    lp->col = ml_get_len(lp->lnum);
     lp->col -= utf_head_off(p, p + lp->col);
     return 1;
   }
