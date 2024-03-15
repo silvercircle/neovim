@@ -1550,7 +1550,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
 
       // When only updating the columns and that's done, stop here.
       if (col_rows > 0) {
-        win_put_linebuf(wp, wlv.row, 0, wlv.off, wlv.off, bg_attr, false);
+        win_put_linebuf(wp, wlv.row, wlv.off, wlv.off, bg_attr, false);
         // Need to update more screen lines if:
         // - 'statuscolumn' needs to be drawn, or
         // - LineNrAbove or LineNrBelow is used, or
@@ -1606,7 +1606,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
         && lnum == wp->w_cursor.lnum && wlv.vcol >= wp->w_virtcol) {
       draw_virt_text(wp, buf, win_col_offset, &wlv.col, wlv.row);
       // don't clear anything after wlv.col
-      win_put_linebuf(wp, wlv.row, 0, wlv.col, wlv.col, bg_attr, false);
+      win_put_linebuf(wp, wlv.row, wlv.col, wlv.col, bg_attr, false);
       // Pretend we have finished updating the window.  Except when
       // 'cursorcolumn' is set.
       if (wp->w_p_cuc) {
@@ -2404,6 +2404,13 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
           } else {
             mb_schar = schar_from_ascii(' ');
           }
+
+          if (utf_char2cells(mb_c) > 1) {
+            // When the first char to be concealed is double-width,
+            // need to advance one more virtual column.
+            wlv.n_extra++;
+          }
+
           mb_c = schar_get_first_codepoint(mb_schar);
 
           prev_syntax_id = syntax_seqnr;
@@ -2595,10 +2602,11 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
 
           int col_attr = base_attr;
 
-          if (wp->w_p_cuc && vcol_hlc(wlv) == wp->w_virtcol) {
-            col_attr = cuc_attr;
+          if (wp->w_p_cuc && vcol_hlc(wlv) == wp->w_virtcol
+              && lnum != wp->w_cursor.lnum) {
+            col_attr = hl_combine_attr(col_attr, cuc_attr);
           } else if (wlv.color_cols && vcol_hlc(wlv) == *wlv.color_cols) {
-            col_attr = hl_combine_attr(wlv.line_attr_lowprio, mc_attr);
+            col_attr = hl_combine_attr(col_attr, mc_attr);
           }
 
           col_attr = hl_combine_attr(col_attr, wlv.line_attr);
@@ -2631,7 +2639,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
         draw_virt_text_item(buf, win_col_offset, fold_vt, kHlModeCombine, grid->cols, 0);
       }
       draw_virt_text(wp, buf, win_col_offset, &wlv.col, wlv.row);
-      win_put_linebuf(wp, wlv.row, 0, wlv.col, grid->cols, bg_attr, false);
+      win_put_linebuf(wp, wlv.row, wlv.col, grid->cols, bg_attr, false);
       wlv.row++;
 
       // Update w_cline_height and w_cline_folded if the cursor line was
@@ -2739,11 +2747,21 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
       wlv.off++;
       wlv.col++;
     } else if (wp->w_p_cole > 0 && is_concealing) {
+      bool concealed_wide = utf_char2cells(mb_c) > 1;
+
       wlv.skip_cells--;
       wlv.vcol_off_co++;
+      if (concealed_wide) {
+        // When a double-width char is concealed,
+        // need to advance one more virtual column.
+        wlv.vcol++;
+        wlv.vcol_off_co++;
+      }
+
       if (wlv.n_extra > 0) {
         wlv.vcol_off_co += wlv.n_extra;
       }
+
       if (is_wrapped) {
         // Special voodoo required if 'wrap' is on.
         //
@@ -2764,7 +2782,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
           wlv.n_attr = 0;
         }
 
-        if (utf_char2cells(mb_c) > 1) {
+        if (concealed_wide) {
           // Need to fill two screen columns.
           wlv.boguscols++;
           wlv.col++;
@@ -2799,7 +2817,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
       wlv.char_attr = vcol_save_attr;
     }
 
-    // restore attributes after "predeces" in 'listchars'
+    // restore attributes after "precedes" in 'listchars'
     if (n_attr3 > 0 && --n_attr3 == 0) {
       wlv.char_attr = saved_attr3;
     }
@@ -2861,7 +2879,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
         draw_virt_text(wp, buf, win_col_offset, &draw_col, wlv.row);
       }
 
-      win_put_linebuf(wp, wlv.row, 0, draw_col, grid->cols, bg_attr, wrap);
+      win_put_linebuf(wp, wlv.row, draw_col, grid->cols, bg_attr, wrap);
       if (wrap) {
         ScreenGrid *current_grid = grid;
         int current_row = wlv.row;
@@ -2921,15 +2939,14 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, s
   return wlv.row;
 }
 
-static void win_put_linebuf(win_T *wp, int row, int coloff, int endcol, int clear_width,
-                            int bg_attr, bool wrap)
+static void win_put_linebuf(win_T *wp, int row, int endcol, int clear_width, int bg_attr, bool wrap)
 {
   ScreenGrid *grid = &wp->w_grid;
 
-  int start_col = 0;
+  int startcol = 0;
 
   if (wp->w_p_rl) {
-    linebuf_mirror(&start_col, &endcol, &clear_width, grid->cols);
+    linebuf_mirror(&startcol, &endcol, &clear_width, grid->cols);
   }
 
   // Take care of putting "<<<" on the first line for 'smoothscroll'.
@@ -2958,6 +2975,7 @@ static void win_put_linebuf(win_T *wp, int row, int coloff, int endcol, int clea
     }
   }
 
+  int coloff = 0;
   grid_adjust(&grid, &row, &coloff);
-  grid_put_linebuf(grid, row, coloff, start_col, endcol, clear_width, wp->w_p_rl, bg_attr, wrap);
+  grid_put_linebuf(grid, row, coloff, startcol, endcol, clear_width, wp->w_p_rl, bg_attr, wrap);
 }

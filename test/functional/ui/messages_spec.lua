@@ -1627,13 +1627,41 @@ describe('ui/ext_messages', function()
       {1:~                                                                               }|*5
     ]])
 
-    feed('<c-l>')
-    screen:expect([[
+    -- <c-l> (same as :mode) does _not_ clear intro message
+    feed('<c-l>i')
+    screen:expect {
+      grid = [[
       ^                                                                                |
-      {1:~                                                                               }|*23
-    ]])
+      {1:~                                                                               }|*4
+      {MATCH:.*}|
+      {1:~                                                                               }|
+      {1:~                 }Nvim is open source and freely distributable{1:                  }|
+      {1:~                           }https://neovim.io/#chat{1:                             }|
+      {1:~                                                                               }|
+      {1:~                }type  :help nvim{5:<Enter>}       if you are new! {1:                 }|
+      {1:~                }type  :checkhealth{5:<Enter>}     to optimize Nvim{1:                 }|
+      {1:~                }type  :q{5:<Enter>}               to exit         {1:                 }|
+      {1:~                }type  :help{5:<Enter>}            for help        {1:                 }|
+      {1:~                                                                               }|
+      {1:~{MATCH: +}}type  :help news{5:<Enter>} to see changes in v{MATCH:%d+%.%d+}{1:{MATCH: +}}|
+      {1:~                                                                               }|
+      {MATCH:.*}|*2
+      {1:~                                                                               }|*5
+    ]],
+      showmode = { { '-- INSERT --', 3 } },
+    }
 
-    feed(':intro<cr>')
+    -- but editing text does..
+    feed('x')
+    screen:expect {
+      grid = [[
+      x^                                                                               |
+      {1:~                                                                               }|*23
+    ]],
+      showmode = { { '-- INSERT --', 3 } },
+    }
+
+    feed('<esc>:intro<cr>')
     screen:expect {
       grid = [[
       ^                                                                                |
@@ -1656,6 +1684,14 @@ describe('ui/ext_messages', function()
       messages = {
         { content = { { 'Press ENTER or type command to continue', 4 } }, kind = 'return_prompt' },
       },
+    }
+
+    feed('<cr>')
+    screen:expect {
+      grid = [[
+      ^x                                                                               |
+      {1:~                                                                               }|*23
+    ]],
     }
   end)
 
@@ -1713,6 +1749,82 @@ describe('ui/ext_messages', function()
       },
     })
   end)
+end)
+
+it('ui/ext_multigrid supports intro screen', function()
+  clear { args_rm = { '--headless' }, args = { '--cmd', 'set shortmess-=I' } }
+  local screen = Screen.new(80, 24)
+  screen:attach({ rgb = true, ext_multigrid = true })
+  screen:set_default_attr_ids {
+    [1] = { bold = true, foreground = Screen.colors.Blue1 },
+    [2] = { foreground = Screen.colors.Grey100, background = Screen.colors.Red },
+    [3] = { bold = true },
+    [4] = { bold = true, foreground = Screen.colors.SeaGreen4 },
+    [5] = { foreground = Screen.colors.Blue1 },
+  }
+
+  screen:expect {
+    grid = [[
+    ## grid 1
+      [2:--------------------------------------------------------------------------------]|*23
+      [3:--------------------------------------------------------------------------------]|
+    ## grid 2
+      ^                                                                                |
+      {1:~                                                                               }|*4
+      {MATCH:.*}|
+      {1:~                                                                               }|
+      {1:~                 }Nvim is open source and freely distributable{1:                  }|
+      {1:~                           }https://neovim.io/#chat{1:                             }|
+      {1:~                                                                               }|
+      {1:~                }type  :help nvim{5:<Enter>}       if you are new! {1:                 }|
+      {1:~                }type  :checkhealth{5:<Enter>}     to optimize Nvim{1:                 }|
+      {1:~                }type  :q{5:<Enter>}               to exit         {1:                 }|
+      {1:~                }type  :help{5:<Enter>}            for help        {1:                 }|
+      {1:~                                                                               }|
+      {1:~{MATCH: +}}type  :help news{5:<Enter>} to see changes in v{MATCH:%d+%.%d+}{1:{MATCH: +}}|
+      {1:~                                                                               }|
+      {MATCH:.*}|*2
+      {1:~                                                                               }|*4
+    ## grid 3
+                                                                                      |
+    ]],
+    win_viewport = {
+      [2] = {
+        win = 1000,
+        topline = 0,
+        botline = 2,
+        curline = 0,
+        curcol = 0,
+        linecount = 1,
+        sum_scroll_delta = 0,
+      },
+    },
+  }
+
+  feed 'ix'
+  screen:expect {
+    grid = [[
+    ## grid 1
+      [2:--------------------------------------------------------------------------------]|*23
+      [3:--------------------------------------------------------------------------------]|
+    ## grid 2
+      x^                                                                               |
+      {1:~                                                                               }|*22
+    ## grid 3
+      {3:-- INSERT --}                                                                    |
+    ]],
+    win_viewport = {
+      [2] = {
+        win = 1000,
+        topline = 0,
+        botline = 2,
+        curline = 0,
+        curcol = 1,
+        linecount = 1,
+        sum_scroll_delta = 0,
+      },
+    },
+  }
 end)
 
 describe('ui/msg_puts_printf', function()
