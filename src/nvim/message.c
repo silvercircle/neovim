@@ -2281,7 +2281,7 @@ static void msg_puts_display(const char *str, int maxlen, int attr, int recurse)
   }
   msg_cursor_goto(msg_row, msg_col);
 
-  if (p_more && !recurse && !(s == sb_str + 1 && *sb_str == '\n')) {
+  if (p_more && !recurse) {
     store_sb_text(&sb_str, s, attr, &sb_col, false);
   }
 
@@ -2713,7 +2713,7 @@ static bool do_more_prompt(int typed_char)
   // If headless mode is enabled and no input is required, this variable
   // will be true. However If server mode is enabled, the message "--more--"
   // should be displayed.
-  bool no_need_more = headless_mode && !embedded_mode;
+  bool no_need_more = headless_mode && !embedded_mode && !ui_active();
 
   // We get called recursively when a timer callback outputs a message. In
   // that case don't show another prompt. Also when at the hit-Enter prompt
