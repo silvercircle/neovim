@@ -105,6 +105,11 @@ local function fake_lsp_server_setup(test_name, timeout_ms, options, settings)
           uri = 'file://' .. vim.uv.cwd(),
           name = 'test_folder',
       }};
+      before_init = function(params, config)
+        vim.schedule(function()
+          vim.rpcrequest(1, "setup")
+        end)
+      end,
       on_init = function(client, result)
         TEST_RPC_CLIENT = client
         vim.rpcrequest(1, "init", result)
@@ -128,6 +133,18 @@ local function fake_lsp_server_setup(test_name, timeout_ms, options, settings)
   )
 end
 
+--- @class test.lsp.Config
+--- @field test_name string
+--- @field timeout_ms? integer
+--- @field options? table
+--- @field settings? table
+---
+--- @field on_setup? fun()
+--- @field on_init? fun(client: vim.lsp.Client, ...)
+--- @field on_handler? fun(...)
+--- @field on_exit? fun(code: integer, signal: integer)
+
+--- @param config test.lsp.Config
 function M.test_rpc_server(config)
   if config.test_name then
     M.clear_notrace()
@@ -158,8 +175,15 @@ function M.test_rpc_server(config)
       end
     end,
   })
+  --- @type integer, integer
   local code, signal
   local function on_request(method, args)
+    if method == 'setup' then
+      if config.on_setup then
+        config.on_setup()
+      end
+      return NIL
+    end
     if method == 'init' then
       if config.on_init then
         config.on_init(client, unpack(args))
@@ -180,8 +204,8 @@ function M.test_rpc_server(config)
     end
   end
   --  TODO specify timeout?
-  --  run(on_request, on_notify, config.on_setup, 1000)
-  run(on_request, on_notify, config.on_setup)
+  --  run(on_request, on_notify, nil, 1000)
+  run(on_request, on_notify, nil)
   if config.on_exit then
     config.on_exit(code, signal)
   end

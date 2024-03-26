@@ -11,10 +11,9 @@ vim.bo = vim.bo
 ---@field [integer] vim.wo
 vim.wo = vim.wo
 
---- Allow CTRL-_ in Insert and Command-line mode.  This is default off, to
---- avoid that users that accidentally type CTRL-_ instead of SHIFT-_ get
---- into reverse Insert mode, and don't know how to get out.  See
---- 'revins'.
+--- Allow CTRL-_ in Insert mode.  This is default off, to avoid that users
+--- that accidentally type CTRL-_ instead of SHIFT-_ get into reverse
+--- Insert mode, and don't know how to get out.  See 'revins'.
 ---
 --- @type boolean
 vim.o.allowrevins = false
@@ -6846,7 +6845,7 @@ vim.go.tpm = vim.go.tabpagemax
 --- appear wrong in many places.
 --- The value must be more than 0 and less than 10000.
 ---
---- There are four main ways to use tabs in Vim:
+--- There are five main ways to use tabs in Vim:
 --- 1. Always keep 'tabstop' at 8, set 'softtabstop' and 'shiftwidth' to 4
 ---    (or 3 or whatever you prefer) and use 'noexpandtab'.  Then Vim
 ---    will use a mix of tabs and spaces, but typing <Tab> and <BS> will
