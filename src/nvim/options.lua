@@ -7,6 +7,7 @@
 --- @field varname? string
 --- @field pv_name? string
 --- @field type 'boolean'|'number'|'string'
+--- @field hidden? boolean
 --- @field immutable? boolean
 --- @field list? 'comma'|'onecomma'|'commacolon'|'onecommacolon'|'flags'|'flagscomma'
 --- @field scope vim.option_scope[]
@@ -5141,12 +5142,12 @@ return {
     },
     {
       abbreviation = 'mco',
-      defaults = { if_true = 6 },
+      defaults = { if_true = imacros('MAX_MCO') },
       full_name = 'maxcombine',
       scope = { 'global' },
       short_desc = N_('maximum nr of combining characters displayed'),
       type = 'number',
-      varname = 'p_mco',
+      hidden = true,
     },
     {
       abbreviation = 'mfd',
