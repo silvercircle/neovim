@@ -236,7 +236,7 @@ CharSize charsize_regular(CharsizeArg *csarg, char *const cur, colnr_T const vco
       wcol += col_off_prev;
     }
 
-    if (wcol + size > wp->w_width) {
+    if (wcol + size > wp->w_width_inner) {
       // cells taken by 'showbreak'/'breakindent' halfway current char
       int head_mid = csarg->indent_width;
       if (head_mid == INT_MIN) {
@@ -249,7 +249,7 @@ CharSize charsize_regular(CharsizeArg *csarg, char *const cur, colnr_T const vco
         }
         csarg->indent_width = head_mid;
       }
-      if (head_mid > 0 && wcol + size > wp->w_width_inner) {
+      if (head_mid > 0) {
         // Calculate effective window width.
         int prev_rem = wp->w_width_inner - wcol;
         int width = width2 - head_mid;
