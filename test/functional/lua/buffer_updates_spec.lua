@@ -1,5 +1,5 @@
 -- Test suite for testing interactions with API bindings
-local t = require('test.functional.testutil')(after_each)
+local t = require('test.functional.testutil')()
 local Screen = require('test.functional.ui.screen')
 
 local command = t.command
@@ -1263,6 +1263,25 @@ describe('lua: nvim_buf_attach on_bytes', function()
       command('diffget')
       check_events {
         { 'test1', 'bytes', 1, 4, 1, 0, 4, 1, 0, 4, 1, 0, 4 },
+      }
+    end)
+
+    it('prompt buffer', function()
+      local check_events = setup_eventcheck(verify, {})
+      api.nvim_set_option_value('buftype', 'prompt', {})
+      feed('i')
+      check_events {
+        { 'test1', 'bytes', 1, 3, 0, 0, 0, 0, 0, 0, 0, 2, 2 },
+      }
+      feed('<CR>')
+      check_events {
+        { 'test1', 'bytes', 1, 4, 1, 0, 3, 0, 0, 0, 1, 0, 1 },
+        { 'test1', 'bytes', 1, 5, 1, 0, 3, 0, 0, 0, 0, 2, 2 },
+      }
+      feed('<CR>')
+      check_events {
+        { 'test1', 'bytes', 1, 6, 2, 0, 6, 0, 0, 0, 1, 0, 1 },
+        { 'test1', 'bytes', 1, 7, 2, 0, 6, 0, 0, 0, 0, 2, 2 },
       }
     end)
 
