@@ -78,26 +78,36 @@ do
   --- See |&-default|
   vim.keymap.set('n', '&', ':&&<CR>', { desc = ':help &-default' })
 
-  --- Use Q in visual mode to execute a macro on each line of the selection. #21422
+  --- Use Q in Visual mode to execute a macro on each line of the selection. #21422
+  --- This only make sense in linewise Visual mode. #28287
   ---
   --- Applies to @x and includes @@ too.
   vim.keymap.set(
     'x',
     'Q',
-    ':normal! @<C-R>=reg_recorded()<CR><CR>',
-    { silent = true, desc = ':help v_Q-default' }
+    "mode() == 'V' ? ':normal! @<C-R>=reg_recorded()<CR><CR>' : 'Q'",
+    { silent = true, expr = true, desc = ':help v_Q-default' }
   )
   vim.keymap.set(
     'x',
     '@',
-    "':normal! @'.getcharstr().'<CR>'",
+    "mode() == 'V' ? ':normal! @'.getcharstr().'<CR>' : '@'",
     { silent = true, expr = true, desc = ':help v_@-default' }
   )
 
-  --- Map |gx| to call |vim.ui.open| on the identifier under the cursor
+  --- Map |gx| to call |vim.ui.open| on the <cfile> at cursor.
   do
     local function do_open(uri)
-      local _, err = vim.ui.open(uri)
+      local cmd, err = vim.ui.open(uri)
+      local rv = cmd and cmd:wait(1000) or nil
+      if cmd and rv and rv.code ~= 0 then
+        err = ('vim.ui.open: command %s (%d): %s'):format(
+          (rv.code == 124 and 'timeout' or 'failed'),
+          rv.code,
+          vim.inspect(cmd.cmd)
+        )
+      end
+
       if err then
         vim.notify(err, vim.log.levels.ERROR)
       end
