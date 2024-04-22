@@ -544,6 +544,7 @@ function vim.list_extend(dst, src, start, finish)
   return dst
 end
 
+--- @deprecated
 --- Creates a copy of a list-like table such that any nested tables are
 --- "unrolled" and appended to the result.
 ---
@@ -552,6 +553,7 @@ end
 ---@param t table List-like table
 ---@return table Flattened copy of the given list-like table
 function vim.tbl_flatten(t)
+  vim.deprecate('vim.tbl_flatten', 'vim.iter(…):flatten():totable()', '0.12')
   local result = {}
   --- @param _t table<any,any>
   local function _tbl_flatten(_t)
