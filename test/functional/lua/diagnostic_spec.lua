@@ -1076,13 +1076,13 @@ describe('vim.diagnostic', function()
 
     it('allows filtering by line', function()
       eq(
-        1,
+        2,
         exec_lua [[
         vim.diagnostic.set(diagnostic_ns, diagnostic_bufnr, {
           make_error("Error 1", 1, 1, 1, 5),
           make_warning("Warning on Server 1", 1, 1, 2, 3),
           make_info("Ignored information", 1, 1, 2, 3),
-          make_error("Error On Other Line", 2, 1, 1, 5),
+          make_error("Error On Other Line", 3, 1, 3, 5),
         })
 
         return #vim.diagnostic.get(diagnostic_bufnr, {lnum = 2})
@@ -1192,13 +1192,16 @@ describe('vim.diagnostic', function()
 
     it('allows filtering by line', function()
       eq(
-        exec_lua [[return { [vim.diagnostic.severity.ERROR] = 1 }]],
+        exec_lua [[return {
+          [vim.diagnostic.severity.WARN] = 1,
+          [vim.diagnostic.severity.INFO] = 1,
+        }]],
         exec_lua [[
           vim.diagnostic.set(diagnostic_ns, diagnostic_bufnr, {
             make_error("Error 1", 1, 1, 1, 5),
             make_warning("Warning on Server 1", 1, 1, 2, 3),
             make_info("Ignored information", 1, 1, 2, 3),
-            make_error("Error On Other Line", 2, 1, 1, 5),
+            make_error("Error On Other Line", 3, 1, 3, 5),
           })
 
           return vim.diagnostic.count(diagnostic_bufnr, {lnum = 2})
@@ -2499,6 +2502,47 @@ describe('vim.diagnostic', function()
         }
         vim.api.nvim_win_set_buf(0, diagnostic_bufnr)
         vim.diagnostic.set(diagnostic_ns, diagnostic_bufnr, diagnostics)
+        local float_bufnr, winnr = vim.diagnostic.open_float(0, { header = false })
+        local lines = vim.api.nvim_buf_get_lines(float_bufnr, 0, -1, false)
+        vim.api.nvim_win_close(winnr, true)
+        return lines
+      ]]
+      )
+    end)
+
+    it('works for multi-line diagnostics #21949', function()
+      -- open float failed non diagnostic lnum
+      eq(
+        vim.NIL,
+        exec_lua [[
+        local diagnostics = {
+          make_error("Error in two lines lnum is 1 and end_lnum is 2", 1, 1, 2, 3),
+        }
+        local winids = {}
+        vim.api.nvim_win_set_buf(0, diagnostic_bufnr)
+        vim.diagnostic.set(diagnostic_ns, diagnostic_bufnr, diagnostics)
+        local _, winnr = vim.diagnostic.open_float(0, { header = false })
+        return winnr
+      ]]
+      )
+
+      -- can open a float window on lnum 1
+      eq(
+        { '1. Error in two lines lnum is 1 and end_lnum is 2' },
+        exec_lua [[
+        vim.api.nvim_win_set_cursor(0, {2, 0})
+        local float_bufnr, winnr = vim.diagnostic.open_float(0, { header = false })
+        local lines = vim.api.nvim_buf_get_lines(float_bufnr, 0, -1, false)
+        vim.api.nvim_win_close(winnr, true)
+        return lines
+      ]]
+      )
+
+      -- can open a float window on end_lnum 2
+      eq(
+        { '1. Error in two lines lnum is 1 and end_lnum is 2' },
+        exec_lua [[
+        vim.api.nvim_win_set_cursor(0, {3, 0})
         local float_bufnr, winnr = vim.diagnostic.open_float(0, { header = false })
         local lines = vim.api.nvim_buf_get_lines(float_bufnr, 0, -1, false)
         vim.api.nvim_win_close(winnr, true)
