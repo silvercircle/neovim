@@ -201,7 +201,7 @@ end
 --- @field bufnr integer
 ---
 --- Suppress error reporting if the LSP server fails to start (default false).
---- @field silent boolean
+--- @field silent? boolean
 
 --- Create a new LSP client and start a language server or reuses an already
 --- running client if one is found matching `name` and `root_dir`.
@@ -348,7 +348,7 @@ function lsp._set_defaults(client, bufnr)
       and is_empty_or_default(bufnr, 'keywordprg')
       and vim.fn.maparg('K', 'n', false, false) == ''
     then
-      vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
+      vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr, desc = 'vim.lsp.buf.hover()' })
     end
   end)
   if client.supports_method(ms.textDocument_diagnostic) then
