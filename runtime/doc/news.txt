@@ -140,6 +140,11 @@ The following changes may require adaptations in user config or plugins.
 • |nvim_open_win()| now blocks all autocommands when `noautocmd` is set,
   rather than just those from setting the `buffer` to display in the window.
 
+• |vim.diagnostic.goto_next()| and |vim.diagnostic.goto_prev()| jump to the
+  diagnostic with the highest severity when the "severity" option is
+  unspecified. To use the old behavior, use: >lua
+    vim.diagnostic.goto_next({ severity = { min = vim.diagnostic.severity.HINT } })
+
 ==============================================================================
 BREAKING CHANGES IN HEAD                                    *news-breaking-dev*
 
@@ -397,19 +402,16 @@ The following changes to existing APIs or features add new behavior.
 • |vim.diagnostic.config()| now accepts a function for the virtual_text.prefix
   option, which allows for rendering e.g., diagnostic severities differently.
 
-• |vim.diagnostic.goto_next()| and |vim.diagnostic.goto_prev()| jump to the
-  diagnostic with the highest severity when the "severity" option is
-  unspecified. To use the old behavior, use: >lua
-    vim.diagnostic.goto_next({ severity = { min = vim.diagnostic.severity.HINT } })
-
 • Defaults:
   • On Windows 'isfname' does not include ":". Drive letters are handled
     correctly without it. (Use |gF| for filepaths suffixed with ":line:col").
   • 'comments' includes "fb:•".
   • 'shortmess' includes the "C" flag.
-  • 'grepprg' defaults to using ripgrep if available.
+  • 'grepprg' uses the -H and -I flags for grep by default,
+    and defaults to using ripgrep if available.
   • |crn| in Normal mode maps to |vim.lsp.buf.rename()|.
-  • |crr| in Normal and Visual mode maps to |vim.lsp.buf.code_action()|.
+  • |crr| in Normal mode maps to |vim.lsp.buf.code_action()|.
+  • |v_CTRL-R_CTRL-R| in Visual mode maps to |vim.lsp.buf.code_action()|.
   • "gr" in Normal mode maps to |vim.lsp.buf.references()| |gr-default|
   • |i_CTRL-S| in Insert mode maps to |vim.lsp.buf.signature_help()|
   • "]d" and "[d" in Normal mode map to |vim.diagnostic.goto_next()| and
