@@ -1968,6 +1968,14 @@ func Test_visual_getregion()
     #" using invalid value for "type"
     call assert_fails("call getregion(getpos('.'), getpos('.'), {'type': '' })", 'E475:')
     call assert_fails("call getregionpos(getpos('.'), getpos('.'), {'type': '' })", 'E475:')
+    call assert_fails("call getregion(getpos('.'), getpos('.'), {'type': 'v0' })", 'E475:')
+    call assert_fails("call getregionpos(getpos('.'), getpos('.'), {'type': 'v0' })", 'E475:')
+    call assert_fails("call getregion(getpos('.'), getpos('.'), {'type': 'V0' })", 'E475:')
+    call assert_fails("call getregionpos(getpos('.'), getpos('.'), {'type': 'V0' })", 'E475:')
+    call assert_fails("call getregion(getpos('.'), getpos('.'), {'type': '\<C-v>0' })", 'E475:')
+    call assert_fails("call getregionpos(getpos('.'), getpos('.'), {'type': '\<C-v>0' })", 'E475:')
+    call assert_fails("call getregion(getpos('.'), getpos('.'), {'type': '\<C-v>1:' })", 'E475:')
+    call assert_fails("call getregionpos(getpos('.'), getpos('.'), {'type': '\<C-v>1:' })", 'E475:')
 
     #" using a mark from another buffer to current buffer
     new
@@ -2546,30 +2554,127 @@ func Test_getregion_invalid_buf()
   bwipe!
 endfunc
 
-func Test_getregion_maxcol()
-  new
+func Test_getregion_after_yank()
+  func! Check_Results(type)
+    call assert_equal(g:expected_region,
+          \ getregion(getpos("'["), getpos("']"), #{ type: a:type }))
+    call assert_equal(g:expected_regionpos,
+          \ getregionpos(getpos("'["), getpos("']"), #{ type: a:type }))
+    call assert_equal(g:expected_region,
+          \ getregion(getpos("']"), getpos("'["), #{ type: a:type }))
+    call assert_equal(g:expected_regionpos,
+          \ getregionpos(getpos("']"), getpos("'["), #{ type: a:type }))
+    let g:checked = 1
+  endfunc
+
   autocmd TextYankPost *
         \ : if v:event.operator ==? 'y'
-        \ | call assert_equal([
-        \                       [[bufnr('%'), 1, 1, 0], [bufnr('%'), 1, 4, 0]],
-        \                     ],
-        \                     getregionpos(getpos("'["), getpos("']"),
-        \                                  #{ mode: visualmode() }))
-        \ | call assert_equal(['abcd'],
-        \                     getregion(getpos("'["), getpos("']"),
-        \                               #{ mode: visualmode() }))
-        \ | call assert_equal([
-        \                       [[bufnr('%'), 1, 1, 0], [bufnr('%'), 1, 4, 0]],
-        \                     ],
-        \                     getregionpos(getpos("']"), getpos("'["),
-        \                                  #{ mode: visualmode() }))
-        \ | call assert_equal(['abcd'],
-        \                     getregion(getpos("']"), getpos("'["),
-        \                               #{ mode: visualmode() }))
+        \ | call Check_Results(v:event.regtype)
         \ | endif
-  call setline(1, ['abcd', 'efghij'])
+
+  new
+  call setline(1, ['abcd', 'efghijk', 'lmn'])
+
+  let g:expected_region = ['abcd']
+  let g:expected_regionpos = [
+        \   [[bufnr('%'), 1, 1, 0], [bufnr('%'), 1, 4, 0]],
+        \ ]
+  let g:checked = 0
   normal yy
+  call assert_equal(1, g:checked)
+  call Check_Results(getregtype('"'))
+
+  let g:expected_region = ['cd', 'ghijk', 'n']
+  let g:expected_regionpos = [
+        \   [[bufnr('%'), 1, 3, 0], [bufnr('%'), 1, 4, 0]],
+        \   [[bufnr('%'), 2, 3, 0], [bufnr('%'), 2, 7, 0]],
+        \   [[bufnr('%'), 3, 3, 0], [bufnr('%'), 3, 3, 0]],
+        \ ]
+  let g:checked = 0
+  call feedkeys("gg0ll\<C-V>jj$y", 'tx')
+  call assert_equal(1, g:checked)
+  call Check_Results(getregtype('"'))
+  call assert_equal(g:expected_region, getreg('"', v:true, v:true))
+
+  let g:expected_region = ['bc', 'fg', 'mn']
+  let g:expected_regionpos = [
+        \   [[bufnr('%'), 1, 2, 0], [bufnr('%'), 1, 3, 0]],
+        \   [[bufnr('%'), 2, 2, 0], [bufnr('%'), 2, 3, 0]],
+        \   [[bufnr('%'), 3, 2, 0], [bufnr('%'), 3, 3, 0]],
+        \ ]
+  let g:checked = 0
+  call feedkeys("gg0l\<C-V>jjly", 'tx')
+  call assert_equal(1, g:checked)
+  call Check_Results(getregtype('"'))
+  call assert_equal(g:expected_region, getreg('"', v:true, v:true))
+
   bwipe!
+
+  new
+  let lines = ['asdfghjkl', '«口=口»', 'qwertyuiop', '口口=口口', 'zxcvbnm']
+  call setline(1, lines)
+
+  let g:expected_region = lines
+  let g:expected_regionpos = [
+        \   [[bufnr('%'), 1, 1, 0], [bufnr('%'), 1, 9, 0]],
+        \   [[bufnr('%'), 2, 1, 0], [bufnr('%'), 2, 11, 0]],
+        \   [[bufnr('%'), 3, 1, 0], [bufnr('%'), 3, 10, 0]],
+        \   [[bufnr('%'), 4, 1, 0], [bufnr('%'), 4, 13, 0]],
+        \   [[bufnr('%'), 5, 1, 0], [bufnr('%'), 5, 7, 0]],
+        \ ]
+  let g:checked = 0
+  call feedkeys('ggyG', 'tx')
+  call assert_equal(1, g:checked)
+  call Check_Results(getregtype('"'))
+  call assert_equal(g:expected_region, getreg('"', v:true, v:true))
+
+  let g:expected_region = ['=口»', 'qwertyuiop', '口口=口']
+  let g:expected_regionpos = [
+        \   [[bufnr('%'), 2, 6, 0], [bufnr('%'), 2, 11, 0]],
+        \   [[bufnr('%'), 3, 1, 0], [bufnr('%'), 3, 10, 0]],
+        \   [[bufnr('%'), 4, 1, 0], [bufnr('%'), 4, 10, 0]],
+        \ ]
+  let g:checked = 0
+  call feedkeys('2gg02lv2j2ly', 'tx')
+  call assert_equal(1, g:checked)
+  call Check_Results(getregtype('"'))
+  call assert_equal(g:expected_region, getreg('"', v:true, v:true))
+
+  let g:expected_region = ['asdf', '«口=', 'qwer', '口口', 'zxcv']
+  let g:expected_regionpos = [
+        \   [[bufnr('%'), 1, 1, 0], [bufnr('%'), 1, 4, 0]],
+        \   [[bufnr('%'), 2, 1, 0], [bufnr('%'), 2, 6, 0]],
+        \   [[bufnr('%'), 3, 1, 0], [bufnr('%'), 3, 4, 0]],
+        \   [[bufnr('%'), 4, 1, 0], [bufnr('%'), 4, 6, 0]],
+        \   [[bufnr('%'), 5, 1, 0], [bufnr('%'), 5, 4, 0]],
+        \ ]
+  let g:checked = 0
+  call feedkeys("G0\<C-V>3l4ky", 'tx')
+  call assert_equal(1, g:checked)
+  call Check_Results(getregtype('"'))
+  call assert_equal(g:expected_region, getreg('"', v:true, v:true))
+
+  let g:expected_region = ['ghjkl', '口»', 'tyuiop', '=口口', 'bnm']
+  let g:expected_regionpos = [
+        \   [[bufnr('%'), 1, 5, 0], [bufnr('%'), 1, 9, 0]],
+        \   [[bufnr('%'), 2, 7, 0], [bufnr('%'), 2, 11, 0]],
+        \   [[bufnr('%'), 3, 5, 0], [bufnr('%'), 3, 10, 0]],
+        \   [[bufnr('%'), 4, 7, 0], [bufnr('%'), 4, 13, 0]],
+        \   [[bufnr('%'), 5, 5, 0], [bufnr('%'), 5, 7, 0]],
+        \ ]
+  let g:checked = 0
+  call feedkeys("G04l\<C-V>$4ky", 'tx')
+  call assert_equal(1, g:checked)
+  call Check_Results(getregtype('"'))
+  call assert_equal(g:expected_region, getreg('"', v:true, v:true))
+
+  bwipe!
+
+  unlet g:expected_region
+  unlet g:expected_regionpos
+  unlet g:checked
+  autocmd! TextYankPost
+  delfunc Check_Results
 endfunc
 
 func Test_visual_block_cursor_delete()
