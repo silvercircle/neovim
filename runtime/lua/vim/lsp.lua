@@ -391,8 +391,8 @@ end
 local function on_client_exit(code, signal, client_id)
   local client = all_clients[client_id]
 
-  for bufnr in pairs(client.attached_buffers) do
-    vim.schedule(function()
+  vim.schedule(function()
+    for bufnr in pairs(client.attached_buffers) do
       if client and client.attached_buffers[bufnr] then
         api.nvim_exec_autocmds('LspDetach', {
           buffer = bufnr,
@@ -401,15 +401,16 @@ local function on_client_exit(code, signal, client_id)
         })
       end
 
-      local namespace = vim.lsp.diagnostic.get_namespace(client_id)
-      vim.diagnostic.reset(namespace, bufnr)
       client.attached_buffers[bufnr] = nil
 
       if #lsp.get_clients({ bufnr = bufnr, _uninitialized = true }) == 0 then
         reset_defaults(bufnr)
       end
-    end)
-  end
+    end
+
+    local namespace = vim.lsp.diagnostic.get_namespace(client_id)
+    vim.diagnostic.reset(namespace)
+  end)
 
   local name = client.name or 'unknown'
 
@@ -483,7 +484,6 @@ local function text_document_did_save_handler(bufnr)
           text = lsp._buf_get_full_text(bufnr),
         },
       })
-      util.buf_versions[bufnr] = 0
     end
     local save_capability = vim.tbl_get(client.server_capabilities, 'textDocumentSync', 'save')
     if save_capability then
@@ -519,7 +519,6 @@ local function buf_detach_client(bufnr, client)
   end
 
   client.attached_buffers[bufnr] = nil
-  util.buf_versions[bufnr] = nil
 
   local namespace = lsp.diagnostic.get_namespace(client.id)
   vim.diagnostic.reset(namespace, bufnr)
@@ -575,12 +574,11 @@ local function buf_attach(bufnr)
   })
   -- First time, so attach and set up stuff.
   api.nvim_buf_attach(bufnr, false, {
-    on_lines = function(_, _, changedtick, firstline, lastline, new_lastline)
+    on_lines = function(_, _, _, firstline, lastline, new_lastline)
       if #lsp.get_clients({ bufnr = bufnr }) == 0 then
         -- detach if there are no clients
         return #lsp.get_clients({ bufnr = bufnr, _uninitialized = true }) == 0
       end
-      util.buf_versions[bufnr] = changedtick
       changetracking.send_changes(bufnr, firstline, lastline, new_lastline)
     end,
 
