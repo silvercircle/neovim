@@ -10,6 +10,7 @@
 #include "nvim/ascii_defs.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/charset.h"
+#include "nvim/errors.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval_defs.h"
 #include "nvim/event/defs.h"
@@ -987,7 +988,7 @@ static void dynamic_buffer_ensure(DynamicBuffer *buf, size_t desired)
   buf->data = xrealloc(buf->data, buf->cap);
 }
 
-static void system_data_cb(Stream *stream, RBuffer *buf, size_t count, void *data, bool eof)
+static void system_data_cb(RStream *stream, RBuffer *buf, size_t count, void *data, bool eof)
 {
   DynamicBuffer *dbuf = data;
 
@@ -1151,7 +1152,7 @@ end:
   ui_flush();
 }
 
-static void out_data_cb(Stream *stream, RBuffer *buf, size_t count, void *data, bool eof)
+static void out_data_cb(RStream *stream, RBuffer *buf, size_t count, void *data, bool eof)
 {
   size_t cnt;
   char *ptr = rbuffer_read_ptr(buf, &cnt);
@@ -1331,7 +1332,7 @@ static void shell_write_cb(Stream *stream, void *data, int status)
     msg_schedule_semsg(_("E5677: Error writing input to shell-command: %s"),
                        uv_err_name(status));
   }
-  stream_close(stream, NULL, NULL);
+  stream_close(stream, NULL, NULL, false);
 }
 
 /// Applies 'shellxescape' (p_sxe) and 'shellxquote' (p_sxq) to a command.

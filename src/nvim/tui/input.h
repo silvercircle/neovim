@@ -17,6 +17,7 @@ typedef enum {
   kKeyEncodingXterm,   ///< Xterm's modifyOtherKeys encoding (XTMODKEYS)
 } KeyEncoding;
 
+#define KEY_BUFFER_SIZE 0xfff
 typedef struct {
   int in_fd;
   // Phases: -1=all 0=disabled 1=first-chunk 2=continue 3=last-chunk
@@ -33,9 +34,10 @@ typedef struct {
   TermKey_Terminfo_Getstr_Hook *tk_ti_hook_fn;  ///< libtermkey terminfo hook
   uv_timer_t timer_handle;
   Loop *loop;
-  Stream read_stream;
-  RBuffer *key_buffer;
+  RStream read_stream;
   TUIData *tui_data;
+  char key_buffer[KEY_BUFFER_SIZE];
+  size_t key_buffer_len;
 } TermInput;
 
 typedef enum {
