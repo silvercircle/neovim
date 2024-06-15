@@ -1177,6 +1177,8 @@ describe('builtin popupmenu', function()
         ks = { foreground = Screen.colors.Red, background = Screen.colors.Grey },
         xn = { foreground = Screen.colors.White, background = Screen.colors.Magenta },
         xs = { foreground = Screen.colors.Black, background = Screen.colors.Grey },
+        mn = { foreground = Screen.colors.Blue, background = Screen.colors.White },
+        ms = { foreground = Screen.colors.Green, background = Screen.colors.White },
       })
       screen:attach({ ext_multigrid = multigrid })
     end)
@@ -2528,6 +2530,7 @@ describe('builtin popupmenu', function()
         ]],
         }
 
+        -- oldtest: Test_wildmenu_pum_rightleft()
         feed('<tab>')
         screen:expect {
           grid = [[
@@ -4477,6 +4480,27 @@ describe('builtin popupmenu', function()
 
         feed('<Esc>')
 
+        command('set rightleft')
+        feed('/X<CR>:popup PopUp<CR>')
+        screen:expect([[
+                   evif ruof eerht owt eno|
+              evif ruof eerht{7:^X} owt eno dna|
+             {n:             odnU }wt erom eno|
+          {1:   }{n:                  }{1:          ~}|
+          {1:   }{n:            etsaP }{1:          ~}|
+          {1:   }{n:                  }{1:          ~}|
+          {1:   }{n:      droW tceleS }{1:          ~}|
+          {1:   }{n:  ecnetneS tceleS }{1:          ~}|
+          {1:   }{n: hpargaraP tceleS }{1:          ~}|
+          {1:   }{n:      eniL tceleS }{1:          ~}|
+          {1:   }{n:     kcolB tceleS }{1:          ~}|
+          {1:   }{n:       llA tceleS }{1:          ~}|
+          {1:                               ~}|*7
+          :popup PopUp                    |
+        ]])
+        feed('<Esc>')
+        command('set norightleft')
+
         -- Set an <expr> mapping to change a menu entry while it's displayed.
         -- The text should not change but the command does.
         -- Also verify that "changed" shows up, which means the mapping triggered.
@@ -4533,6 +4557,55 @@ describe('builtin popupmenu', function()
         feed('<Esc>')
       end)
 
+      -- oldtest: Test_mouse_popup_position()
+      it('position of right-click menu when clicking near edge', function()
+        screen:try_resize(50, 20)
+        exec([[
+          set mousemodel=popup_setpos
+          aunmenu *
+          source $VIMRUNTIME/menu.vim
+          call setline(1, join(range(20)))
+        ]])
+
+        api.nvim_input_mouse('right', 'press', '', 0, 0, 45 - 1)
+        screen:expect([[
+          0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 ^18 19 |
+          {1:~                                }{n: Undo            }|
+          {1:~                                }{n:                 }|
+          {1:~                                }{n: Paste           }|
+          {1:~                                }{n:                 }|
+          {1:~                                }{n: Select Word     }|
+          {1:~                                }{n: Select Sentence }|
+          {1:~                                }{n: Select Paragraph}|
+          {1:~                                }{n: Select Line     }|
+          {1:~                                }{n: Select Block    }|
+          {1:~                                }{n: Select All      }|
+          {1:~                                                 }|*8
+                                                            |
+        ]])
+        feed('<Esc>')
+
+        command('set rightleft')
+        api.nvim_input_mouse('right', 'press', '', 0, 0, 50 - 45)
+        screen:expect([[
+           91 8^1 71 61 51 41 31 21 11 01 9 8 7 6 5 4 3 2 1 0|
+          {n:            odnU }{1:                                ~}|
+          {n:                 }{1:                                ~}|
+          {n:           etsaP }{1:                                ~}|
+          {n:                 }{1:                                ~}|
+          {n:     droW tceleS }{1:                                ~}|
+          {n: ecnetneS tceleS }{1:                                ~}|
+          {n:hpargaraP tceleS }{1:                                ~}|
+          {n:     eniL tceleS }{1:                                ~}|
+          {n:    kcolB tceleS }{1:                                ~}|
+          {n:      llA tceleS }{1:                                ~}|
+          {1:                                                 ~}|*8
+                                                            |
+        ]])
+        feed('<Esc>')
+        command('set norightleft')
+      end)
+
       describe('"kind" and "menu"', function()
         before_each(function()
           screen:try_resize(30, 8)
@@ -4584,6 +4657,121 @@ describe('builtin popupmenu', function()
             {2:-- }{5:match 1 of 3}               |
           ]])
         end)
+      end)
+
+      -- oldtest: Test_pum_highlights_match()
+      it('can highlight matched text', function()
+        exec([[
+          func Omni_test(findstart, base)
+            if a:findstart
+              return col(".")
+            endif
+            return {
+                  \ 'words': [
+                  \ { 'word': 'foo', 'kind': 'fookind' },
+                  \ { 'word': 'foobar', 'kind': 'fookind' },
+                  \ { 'word': 'fooBaz', 'kind': 'fookind' },
+                  \ { 'word': 'foobala', 'kind': 'fookind' },
+                  \ { 'word': '你好' },
+                  \ { 'word': '你好吗' },
+                  \ { 'word': '你不好吗' },
+                  \ { 'word': '你可好吗' },
+                  \]}
+          endfunc
+          set omnifunc=Omni_test
+          set completeopt=menu,noinsert,fuzzy
+          hi PmenuMatchSel  guifg=Green guibg=White
+          hi PmenuMatch     guifg=Blue guibg=White
+        ]])
+        feed('i<C-X><C-O>')
+        local pum_start = [[
+          ^                                |
+          {s:foo      fookind }{1:               }|
+          {n:foobar   fookind }{1:               }|
+          {n:fooBaz   fookind }{1:               }|
+          {n:foobala  fookind }{1:               }|
+          {n:你好             }{1:               }|
+          {n:你好吗           }{1:               }|
+          {n:你不好吗         }{1:               }|
+          {n:你可好吗         }{1:               }|
+          {1:~                               }|*10
+          {2:-- }{5:match 1 of 8}                 |
+        ]]
+        screen:expect(pum_start)
+        feed('fo')
+        screen:expect([[
+          fo^                              |
+          {ms:fo}{s:o     fookind }{1:                }|
+          {mn:fo}{n:obar  fookind }{1:                }|
+          {mn:fo}{n:oBaz  fookind }{1:                }|
+          {mn:fo}{n:obala fookind }{1:                }|
+          {1:~                               }|*14
+          {2:-- }{5:match 1 of 8}                 |
+        ]])
+        feed('<Esc>S<C-X><C-O>')
+        screen:expect(pum_start)
+        feed('你')
+        screen:expect([[
+          你^                              |
+          {ms:你}{s:好           }{1:                 }|
+          {mn:你}{n:好吗         }{1:                 }|
+          {mn:你}{n:不好吗       }{1:                 }|
+          {mn:你}{n:可好吗       }{1:                 }|
+          {1:~                               }|*14
+          {2:-- }{5:match 1 of 8}                 |
+        ]])
+        feed('吗')
+        screen:expect([[
+          你吗^                            |
+          {ms:你}{s:好}{ms:吗}{s:         }{1:                 }|
+          {mn:你}{n:不好}{mn:吗}{n:       }{1:                 }|
+          {mn:你}{n:可好}{mn:吗}{n:       }{1:                 }|
+          {1:~                               }|*15
+          {2:-- }{5:match 1 of 8}                 |
+        ]])
+
+        feed('<C-E><Esc>')
+        command('set rightleft')
+        feed('S<C-X><C-O>')
+        screen:expect([[
+                                         ^ |
+          {1:               }{s: dnikoof      oof}|
+          {1:               }{n: dnikoof   raboof}|
+          {1:               }{n: dnikoof   zaBoof}|
+          {1:               }{n: dnikoof  alaboof}|
+          {1:               }{n:             好你}|
+          {1:               }{n:           吗好你}|
+          {1:               }{n:         吗好不你}|
+          {1:               }{n:         吗好可你}|
+          {1:                               ~}|*10
+          {2:-- }{5:match 1 of 8}                 |
+        ]])
+        feed('fo')
+        screen:expect([[
+                                       ^ of|
+          {1:                }{s: dnikoof     o}{ms:of}|
+          {1:                }{n: dnikoof  rabo}{mn:of}|
+          {1:                }{n: dnikoof  zaBo}{mn:of}|
+          {1:                }{n: dnikoof alabo}{mn:of}|
+          {1:                               ~}|*14
+          {2:-- }{5:match 1 of 8}                 |
+        ]])
+        feed('<C-E><Esc>')
+        command('set norightleft')
+
+        command('set completeopt-=fuzzy')
+        feed('S<C-X><C-O>')
+        screen:expect(pum_start)
+        feed('fo')
+        screen:expect([[
+          fo^                              |
+          {ms:fo}{s:o     fookind }{1:                }|
+          {mn:fo}{n:obar  fookind }{1:                }|
+          {mn:fo}{n:oBaz  fookind }{1:                }|
+          {mn:fo}{n:obala fookind }{1:                }|
+          {1:~                               }|*14
+          {2:-- }{5:match 1 of 8}                 |
+        ]])
       end)
     end
   end
