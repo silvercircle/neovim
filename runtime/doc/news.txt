@@ -69,7 +69,8 @@ LSP
 
 LUA
 
-• TODO
+• API functions now consistently return an empty dictionary as
+  |vim.empty_dict()|. Earlier, a |lua-special-tbl| was sometimes used.
 
 OPTIONS
 
@@ -141,6 +142,7 @@ LUA
 OPTIONS
 
 • 'completeopt' flag "fuzzy" enables |fuzzy-matching| during |ins-completion|.
+• 'tabclose' controls which tab page to focus when closing a tab page.
 
 PERFORMANCE
 
