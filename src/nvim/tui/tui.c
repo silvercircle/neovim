@@ -517,7 +517,6 @@ static void tui_terminal_start(TUIData *tui)
 static void after_startup_cb(uv_timer_t *handle)
 {
   TUIData *tui = handle->data;
-  tui->is_starting = false;
   tui_terminal_after_startup(tui);
 }
 
@@ -1308,6 +1307,7 @@ void tui_mode_change(TUIData *tui, String mode, Integer mode_idx)
       show_verbose_terminfo(tui);
     }
   }
+  tui->is_starting = false;  // mode entered, no longer starting
   tui->showing_mode = (ModeShape)mode_idx;
 }
 
@@ -1445,13 +1445,6 @@ void tui_flush(TUIData *tui)
   }
 
   while (kv_size(tui->invalid_regions)) {
-    // We don't want to flush invalid regions during startup to avoid clearing
-    // with attributes different from the visible background after startup.
-    if (tui->is_starting) {
-      kv_size(tui->invalid_regions) = 0;
-      break;
-    }
-
     Rect r = kv_pop(tui->invalid_regions);
     assert(r.bot <= grid->height && r.right <= grid->width);
 
