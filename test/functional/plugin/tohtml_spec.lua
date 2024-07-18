@@ -176,6 +176,44 @@ describe(':TOhtml', function()
     }, fn.readfile(out_file))
   end)
 
+  it('expected internal html generated from range', function()
+    insert([[
+    line1
+    line2
+    line3
+    ]])
+    local ns = api.nvim_create_namespace ''
+    api.nvim_buf_set_extmark(0, ns, 0, 0, { end_col = 1, end_row = 1, hl_group = 'Visual' })
+    exec('set termguicolors')
+    local bg = fn.synIDattr(fn.hlID('Normal'), 'bg#', 'gui')
+    local fg = fn.synIDattr(fn.hlID('Normal'), 'fg#', 'gui')
+    exec_lua [[
+    local html = vim.cmd'2,2TOhtml'
+    ]]
+    local out_file = api.nvim_buf_get_name(api.nvim_get_current_buf())
+    eq({
+      '<!DOCTYPE html>',
+      '<html>',
+      '<head>',
+      '<meta charset="UTF-8">',
+      '<title></title>',
+      ('<meta name="colorscheme" content="%s"></meta>'):format(api.nvim_get_var('colors_name')),
+      '<style>',
+      '* {font-family: monospace}',
+      ('body {background-color: %s; color: %s}'):format(bg, fg),
+      '.Visual {background-color: #9b9ea4}',
+      '</style>',
+      '</head>',
+      '<body style="display: flex">',
+      '<pre><span class="Visual">',
+      'l</span>ine2',
+      '',
+      '</pre>',
+      '</body>',
+      '</html>',
+    }, fn.readfile(out_file))
+  end)
+
   it('highlight attributes generated', function()
     --Make sure to uncomment the attribute in `html_syntax_match()`
     exec('hi LINE gui=' .. table.concat({
@@ -287,7 +325,13 @@ describe(':TOhtml', function()
         0,
         { virt_text = { { 'foo' } }, virt_text_pos = 'overlay' }
       )
-      api.nvim_buf_set_extmark(0, ns, 2, 0, { virt_text = { { 'foo' } }, virt_text_pos = 'inline' })
+      api.nvim_buf_set_extmark(
+        0,
+        ns,
+        2,
+        0,
+        { virt_text = { { 'fo┊o', { 'Conceal', 'Comment' } } }, virt_text_pos = 'inline' }
+      )
       --api.nvim_buf_set_extmark(0,ns,3,0,{virt_text={{'foo'}},virt_text_pos='right_align'})
       run_tohtml_and_assert(screen)
     end)
