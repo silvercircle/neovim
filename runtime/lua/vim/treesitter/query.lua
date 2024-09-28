@@ -1028,7 +1028,7 @@ end
 ---
 --- @param lang? string language to open the query editor for. If omitted, inferred from the current buffer's filetype.
 function M.edit(lang)
-  vim.treesitter.dev.edit_query(lang)
+  assert(vim.treesitter.dev.edit_query(lang))
 end
 
 return M
