@@ -108,6 +108,9 @@ TREESITTER
   if no languages are explicitly registered.
 • |vim.treesitter.language.add()| returns `true` if a parser was loaded
   successfully and `nil,errmsg` otherwise instead of throwing an error.
+• New |TSNode:child_with_descendant()|, which is nearly identical to
+  |TSNode:child_containing_descendant()| except that it can return the
+  descendant itself.
 
 TUI
 
@@ -234,6 +237,10 @@ UI
   which controls the tool used to open the given path or URL. If you want to
   globally set this, you can override vim.ui.open using the same approach
   described at |vim.paste()|.
+• The |ins-completion-menu| now supports cascading highlight styles.
+  |hl-PmenuSel| and |hl-PmenuMatch| both inherit from |hl-Pmenu|, and
+  |hl-PmenuMatchSel| inherits highlights from both |hl-PmenuSel| and
+  |hl-PmenuMatch|.
 
 ==============================================================================
 CHANGED FEATURES                                                 *news-changed*
