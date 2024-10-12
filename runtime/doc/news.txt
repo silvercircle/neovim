@@ -139,6 +139,7 @@ DEFAULTS
 • Mappings:
   • |grn| in Normal mode maps to |vim.lsp.buf.rename()|
   • |grr| in Normal mode maps to |vim.lsp.buf.references()|
+  • |gri| in Normal mode maps to |vim.lsp.buf.implementation()|
   • |gra| in Normal and Visual mode maps to |vim.lsp.buf.code_action()|
   • CTRL-S in Insert mode maps to |vim.lsp.buf.signature_help()|
   • Mouse |popup-menu| includes an "Open in web browser" item when you right-click
@@ -260,6 +261,9 @@ These existing features changed their behavior.
   in the unicode standard. Noteworthily, this enables proper display of many
   more emoji characters than before, including those encoded with multiple
   emoji codepoints combined with ZWJ (zero width joiner) codepoints.
+
+• |vim.on_key()| callbacks won't be invoked recursively when a callback itself
+  consumes input.
 
 ==============================================================================
 REMOVED FEATURES                                                 *news-removed*
