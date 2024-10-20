@@ -40,6 +40,8 @@ API
   This is not expected to break clients because there are no known clients
   that actually use the `return_type` field or the parameter type names
   reported by |--api-info| or |nvim_get_api_info()|.
+• |nvim_open_win()| supports a `mouse` field that allows configuring mouse
+  interaction with the window separately from `focusable` field.
 • Renamed `nvim__id_dictionary` (unsupported/experimental API) to
   `nvim__id_dict`.
 
@@ -63,6 +65,8 @@ EDITOR
 • Moving in the buffer list using |:bnext| and similar commands behaves as
   documented and skips help buffers if run from a non-help buffer, otherwise
   it moves to another help buffer.
+• Bells from a |terminal| buffer are now silent by default, unless 'belloff'
+  option doesn't contain "term" or "all".
 
 EVENTS
 
@@ -75,6 +79,9 @@ LSP
   customizing the transformation of an LSP CompletionItem to |complete-items|.
 • |vim.lsp.diagnostic.from()| can be used to convert a list of
   |vim.Diagnostic| objects into their LSP diagnostic representation.
+• |vim.lsp.buf.references()| now handles multiple clients but no longer
+  triggers the global `textDocument/references` handler from
+  `vim.lsp.handlers`
 
 LUA
 
