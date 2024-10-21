@@ -32,7 +32,7 @@ for k, v in pairs({
   func = true,
   F = true,
   lsp = true,
-  highlight = true,
+  hl = true,
   diagnostic = true,
   keymap = true,
   ui = true,
@@ -467,13 +467,11 @@ vim.cmd = setmetatable({}, {
 
 -- These are the vim.env/v/g/o/bo/wo variable magic accessors.
 do
-  local validate = vim.validate
-
   --- @param scope string
   --- @param handle? false|integer
   --- @return vim.var_accessor
   local function make_dict_accessor(scope, handle)
-    validate('scope', scope, 'string')
+    vim.validate('scope', scope, 'string')
     local mt = {}
     function mt:__newindex(k, v)
       return vim._setvar(scope, handle or 0, k, v)
@@ -589,7 +587,7 @@ end
 ---@param timeout integer Number of milliseconds to wait before calling `fn`
 ---@return table timer luv timer object
 function vim.defer_fn(fn, timeout)
-  vim.validate({ fn = { fn, 'c', true } })
+  vim.validate('fn', fn, 'callable', true)
   local timer = assert(vim.uv.new_timer())
   timer:start(
     timeout,
@@ -680,10 +678,8 @@ function vim.on_key(fn, ns_id)
     return vim.tbl_count(on_key_cbs)
   end
 
-  vim.validate({
-    fn = { fn, 'c', true },
-    ns_id = { ns_id, 'n', true },
-  })
+  vim.validate('fn', fn, 'callable', true)
+  vim.validate('ns_id', ns_id, 'number', true)
 
   if ns_id == nil or ns_id == 0 then
     ns_id = vim.api.nvim_create_namespace('')
@@ -1149,16 +1145,22 @@ function vim.deprecate(name, alternative, version, plugin, backtrace)
   if plugin == 'Nvim' then
     require('vim.deprecated.health').add(name, version, traceback(), alternative)
 
-    -- Only issue warning if feature is hard-deprecated as specified by MAINTAIN.md.
-    -- Example: if removal_version is 0.12 (soft-deprecated since 0.10-dev), show warnings starting at
-    -- 0.11, including 0.11-dev
+    -- Show a warning only if feature is hard-deprecated (see MAINTAIN.md).
+    -- Example: if removal `version` is 0.12 (soft-deprecated since 0.10-dev), show warnings
+    -- starting at 0.11, including 0.11-dev.
     local major, minor = version:match('(%d+)%.(%d+)')
     major, minor = tonumber(major), tonumber(minor)
+    local nvim_major = 0 --- Current Nvim major version.
+
+    -- We can't "subtract" from a major version, so:
+    --  * Always treat `major > nvim_major` as soft-deprecation.
+    --  * Compare `minor - 1` if `major == nvim_major`.
+    if major > nvim_major then
+      return -- Always soft-deprecation (see MAINTAIN.md).
+    end
 
     local hard_deprecated_since = string.format('nvim-%d.%d', major, minor - 1)
-    -- Assume there will be no next minor version before bumping up the major version
-    local is_hard_deprecated = minor == 0 or vim.fn.has(hard_deprecated_since) == 1
-    if not is_hard_deprecated then
+    if major == nvim_major and vim.fn.has(hard_deprecated_since) == 0 then
       return
     end
 
@@ -1190,5 +1192,8 @@ require('vim._options')
 -- Remove at Nvim 1.0
 ---@deprecated
 vim.loop = vim.uv
+
+-- Deprecated. Remove at Nvim 2.0
+vim.highlight = vim._defer_deprecated_module('vim.highlight', 'vim.hl')
 
 return vim
