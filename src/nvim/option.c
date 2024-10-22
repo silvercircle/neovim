@@ -1853,6 +1853,9 @@ bool parse_winhl_opt(win_T *wp)
       return false;
     }
     int hl_id_link = nlen ? syn_check_group(p, nlen) : 0;
+    if (hl_id_link == 0) {
+      return false;
+    }
 
     HlAttrs attrs = HLATTRS_INIT;
     attrs.rgb_ae_attr |= HL_GLOBAL;
@@ -5325,6 +5328,7 @@ void buf_copy_options(buf_T *buf, int flags)
       COPY_OPT_SCTX(buf, BV_SPL);
       buf->b_s.b_p_spo = xstrdup(p_spo);
       COPY_OPT_SCTX(buf, BV_SPO);
+      buf->b_s.b_p_spo_flags = spo_flags;
       buf->b_p_inde = xstrdup(p_inde);
       COPY_OPT_SCTX(buf, BV_INDE);
       buf->b_p_indk = xstrdup(p_indk);
