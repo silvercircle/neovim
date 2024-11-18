@@ -2398,14 +2398,22 @@ void nvim__redraw(Dict(redraw) *opts, Error *err)
     redraw_buf_range_later(rbuf, first, last);
   }
 
-  bool flush = opts->flush;
+  // Redraw later types require update_screen() so call implicitly unless set to false.
+  if (HAS_KEY(opts, redraw, valid) || HAS_KEY(opts, redraw, range)) {
+    opts->flush = HAS_KEY(opts, redraw, flush) ? opts->flush : true;
+  }
+
+  // When explicitly set to false and only "redraw later" types are present,
+  // don't call ui_flush() either.
+  bool flush_ui = opts->flush;
   if (opts->tabline) {
     // Flush later in case tabline was just hidden or shown for the first time.
     if (redraw_tabline && firstwin->w_lines_valid == 0) {
-      flush = true;
+      opts->flush = true;
     } else {
       draw_tabline();
     }
+    flush_ui = true;
   }
 
   bool save_lz = p_lz;
@@ -2416,31 +2424,35 @@ void nvim__redraw(Dict(redraw) *opts, Error *err)
     if (win == NULL) {
       FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
         if (buf == NULL || wp->w_buffer == buf) {
-          redraw_status(wp, opts, &flush);
+          redraw_status(wp, opts, &opts->flush);
         }
       }
     } else {
-      redraw_status(win, opts, &flush);
+      redraw_status(win, opts, &opts->flush);
     }
+    flush_ui = true;
   }
 
   win_T *cwin = win ? win : curwin;
   // Allow moving cursor to recently opened window and make sure it is drawn #28868.
   if (opts->cursor && (!cwin->w_grid.target || !cwin->w_grid.target->valid)) {
-    flush = true;
+    opts->flush = true;
   }
 
   // Redraw pending screen updates when explicitly requested or when determined
   // that it is necessary to properly draw other requested components.
-  if (flush && !cmdpreview) {
+  if (opts->flush && !cmdpreview) {
     update_screen();
   }
 
   if (opts->cursor) {
     setcursor_mayforce(cwin, true);
+    flush_ui = true;
   }
 
-  ui_flush();
+  if (flush_ui) {
+    ui_flush();
+  }
 
   RedrawingDisabled = save_rd;
   p_lz = save_lz;
