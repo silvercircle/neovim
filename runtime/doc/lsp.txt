@@ -1090,7 +1090,8 @@ Lua module: vim.lsp.client                                        *lsp-client*
       • {name}?               (`string`, default: client-id) Name in log
                               messages.
       • {get_language_id}?    (`fun(bufnr: integer, filetype: string): string`)
-                              Language ID as string. Defaults to the filetype.
+                              Language ID as string. Defaults to the buffer
+                              filetype.
       • {offset_encoding}?    (`'utf-8'|'utf-16'|'utf-32'`) The encoding that
                               the LSP server expects. Client does not verify
                               this is correct.
