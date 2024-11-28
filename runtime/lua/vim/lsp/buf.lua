@@ -487,7 +487,7 @@ end
 --- ```lua
 --- -- Never request typescript-language-server for formatting
 --- vim.lsp.buf.format {
----   filter = function(client) return client.name ~= "tsserver" end
+---   filter = function(client) return client.name ~= "ts_ls" end
 --- }
 --- ```
 --- @field filter? fun(client: vim.lsp.Client): boolean?
@@ -736,7 +736,7 @@ end
 
 --- Lists all the references to the symbol under the cursor in the quickfix window.
 ---
----@param context (table|nil) Context for the request
+---@param context lsp.ReferenceContext? Context for the request
 ---@see https://microsoft.github.io/language-server-protocol/specifications/specification-current/#textDocument_references
 ---@param opts? vim.lsp.ListOpts
 function M.references(context, opts)
