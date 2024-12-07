@@ -6101,12 +6101,20 @@ static void ex_sleep(exarg_T *eap)
   default:
     semsg(_(e_invarg2), eap->arg); return;
   }
-  do_sleep(len);
+
+  // Hide the cursor if invoked with !
+  do_sleep(len, eap->forceit);
 }
 
 /// Sleep for "msec" milliseconds, but return early on CTRL-C.
-void do_sleep(int64_t msec)
+///
+/// @param hide_cursor  hide the cursor if true
+void do_sleep(int64_t msec, bool hide_cursor)
 {
+  if (hide_cursor) {
+    ui_busy_start();
+  }
+
   ui_flush();  // flush before waiting
   LOOP_PROCESS_EVENTS_UNTIL(&main_loop, main_loop.events, msec, got_int);
 
@@ -6114,6 +6122,10 @@ void do_sleep(int64_t msec)
   // input buffer, otherwise a following call to input() fails.
   if (got_int) {
     vpeekc();
+  }
+
+  if (hide_cursor) {
+    ui_busy_stop();
   }
 }
 
