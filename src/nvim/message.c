@@ -1063,7 +1063,7 @@ int messagesopt_changed(void)
   int messages_wait_new = 0;
   int messages_history_new = 0;
 
-  char *p = p_meo;
+  char *p = p_mopt;
   while (*p != NUL) {
     if (strnequal(p, S_LEN(MESSAGES_OPT_HIT_ENTER))) {
       p += STRLEN_LITERAL(MESSAGES_OPT_HIT_ENTER);
@@ -1098,8 +1098,15 @@ int messagesopt_changed(void)
     return FAIL;
   }
 
+  assert(messages_history_new >= 0);
   // "history" must be <= 10000
   if (messages_history_new > 10000) {
+    return FAIL;
+  }
+
+  assert(messages_wait_new >= 0);
+  // "wait" must be <= 10000
+  if (messages_wait_new > 10000) {
     return FAIL;
   }
 
