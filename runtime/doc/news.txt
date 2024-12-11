@@ -237,6 +237,9 @@ LSP
 • Functions in |vim.lsp.Client| can now be called as methods.
 • Implemented LSP folding: |vim.lsp.foldexpr()|
   https://microsoft.github.io/language-server-protocol/specification/#textDocument_foldingRange
+• |vim.lsp.config()| has been added to define default configurations for
+  servers. In addition, configurations can be specified in `lsp/<name>.lua`.
+• |vim.lsp.enable()| has been added to enable servers.
 
 LUA
 
@@ -286,6 +289,7 @@ TREESITTER
   false, which allows it to return anonymous nodes as well as named nodes.
 • |treesitter-directive-trim!| can trim all whitespace (not just empty lines)
   from both sides of a node.
+• |vim.treesitter.get_captures_at_pos()| now returns the `id` of each capture
 
 TUI
 
