@@ -115,6 +115,7 @@ LSP
 • |vim.lsp.util.make_position_params()|, |vim.lsp.util.make_range_params()|
   and |vim.lsp.util.make_given_range_params()| now require the `position_encoding`
   parameter.
+• `:checkhealth vim.lsp` displays the server version (if available).
 
 LUA
 
@@ -216,6 +217,7 @@ EDITOR
 • On Windows, filename arguments on the command-line prefixed with "~\" or
   "~/" are now expanded to the user's profile directory, not a relative path
   to a literal "~" directory.
+• |hl-ComplMatchIns| shows matched text of the currently inserted completion.
 • |hl-PmenuMatch| and |hl-PmenuMatchSel| show matched text in completion popup.
 
 EVENTS
