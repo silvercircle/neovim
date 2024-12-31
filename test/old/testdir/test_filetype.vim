@@ -2300,6 +2300,27 @@ func Test_cls_file()
   filetype off
 endfunc
 
+func Test_cmd_file()
+  filetype on
+
+  call writefile(['--rom_model'], 'Xfile.cmd')
+  split Xfile.cmd
+  call assert_equal('lnk', &filetype)
+  bwipe!
+
+  call writefile(['/* comment */'], 'Xfile.cmd')
+  split Xfile.cmd
+  call assert_equal('rexx', &filetype)
+  bwipe!
+
+  call writefile(['REM comment'], 'Xfile.cmd')
+  split Xfile.cmd
+  call assert_equal('dosbatch', &filetype)
+  bwipe!
+
+  filetype off
+endfunc
+
 func Test_sig_file()
   filetype on
 
@@ -2773,7 +2794,7 @@ func Test_map_file()
   call assert_equal('lnkmap', &filetype)
   bwipe!
 
-  " TI linker map file
+  " UMN mapserver config file
   call writefile(['MAP', 'NAME "local-demo"', 'END'], 'Xfile.map', 'D')
   split Xfile.map
   call assert_equal('map', &filetype)
