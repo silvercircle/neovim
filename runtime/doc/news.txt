@@ -67,7 +67,6 @@ DEFAULTS
   current buffer, respectively.
 • 'number', 'relativenumber', 'signcolumn', and 'foldcolumn' are disabled in
   |terminal| buffers. See |terminal-config| for an example of changing these defaults.
-• |vim.json.encode()| no longer escapes the forward slash symbol by default
 
 DIAGNOSTICS
 
@@ -93,12 +92,15 @@ EVENTS
 • |vim.ui_attach()| callbacks for |ui-messages| `msg_show` events are executed in
   |api-fast| context.
 • New/enhanced arguments in these existing UI events:
-  • `cmdline_show`: `hl_id` argument to highlight the prompt text.
   • `cmdline_hide`: `abort` argument indicating if the cmdline was aborted.
+  • `cmdline_show`:
+    • Prompts that were previously emitted as `msg_show` events, are now routed
+      through `cmdline_show`.
+    • `hl_id` argument to highlight the prompt text.
   • `msg_show`:
     • `history` argument indicating if the message was added to the history.
-    • new message kinds: "bufwrite", "completion", "list_cmd",
-      "lua_print", "number_prompt", "search_cmd", "undo", "wildlist".
+    • new message kinds: "bufwrite", "completion", "list_cmd", "lua_print",
+      "search_cmd", "undo", "wildlist".
 
 HIGHLIGHTS
 
@@ -137,6 +139,7 @@ LUA
 • Command-line completions for: `vim.g`, `vim.t`, `vim.w`, `vim.b`, `vim.v`,
   `vim.o`, `vim.wo`, `vim.bo`, `vim.opt`, `vim.opt_local`, `vim.opt_global`,
   and `vim.fn`.
+• |vim.json.encode()| no longer escapes forward slashes "/" by default
 
 OPTIONS
 
@@ -192,7 +195,6 @@ The following new features were added.
 API
 
 • |nvim__ns_set()| can set properties for a namespace
-• |vim.json.encode()| has an option to enable forward slash escaping
 
 DEFAULTS
 
@@ -270,6 +272,7 @@ LUA
   is more performant and easier to read.
 • |vim.str_byteindex()| and |vim.str_utfindex()| gained overload signatures
   supporting two new parameters, `encoding` and `strict_indexing`.
+• |vim.json.encode()| has an option to enable forward slash escaping
 • |vim.fs.abspath()| converts paths to absolute paths.
 
 OPTIONS
@@ -282,6 +285,8 @@ PERFORMANCE
 
 • Significantly reduced redraw time for long lines with treesitter
   highlighting.
+• LSP diagnostics and inlay hints are de-duplicated (new requests cancel
+  inflight requests). This greatly improves performance with slow LSP servers.
 
 PLUGINS
 

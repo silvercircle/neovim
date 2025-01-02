@@ -3557,10 +3557,10 @@ static void f_inputlist(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   });
 
   // Ask for choice.
-  bool mouse_used;
-  int selected = prompt_for_number(&mouse_used);
+  bool mouse_used = false;
+  int selected = prompt_for_input(NULL, 0, false, &mouse_used);
   if (mouse_used) {
-    selected -= lines_left;
+    selected = tv_list_len(argvars[0].vval.v_list) - (cmdline_row - mouse_row);
   }
 
   rettv->vval.v_number = selected;
@@ -4177,8 +4177,6 @@ static void f_jobwait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     return;
   }
 
-  ui_busy_start();
-  ui_flush();
   list_T *args = argvars[0].vval.v_list;
   Channel **jobs = xcalloc((size_t)tv_list_len(args), sizeof(*jobs));
   MultiQueue *waiting_jobs = multiqueue_new_parent(loop_on_put, &main_loop);
@@ -4213,6 +4211,13 @@ static void f_jobwait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   if (argvars[1].v_type == VAR_NUMBER && argvars[1].vval.v_number >= 0) {
     remaining = (int)argvars[1].vval.v_number;
     before = os_hrtime();
+  }
+
+  // Only mark the UI as busy when jobwait() blocks
+  const bool busy = remaining != 0;
+  if (busy) {
+    ui_busy_start();
+    ui_flush();
   }
 
   for (i = 0; i < tv_list_len(args); i++) {
@@ -4256,7 +4261,9 @@ static void f_jobwait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
   multiqueue_free(waiting_jobs);
   xfree(jobs);
-  ui_busy_stop();
+  if (busy) {
+    ui_busy_stop();
+  }
   tv_list_ref(rv);
   rettv->v_type = VAR_LIST;
   rettv->vval.v_list = rv;
