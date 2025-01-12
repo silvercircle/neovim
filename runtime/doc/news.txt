@@ -68,6 +68,8 @@ DIAGNOSTICS
 
 • The "underline" diagnostics handler sorts diagnostics by severity when using
   the "severity_sort" option.
+• Diagnostics are filtered by severity before being passed to a diagnostic
+  handler |diagnostic-handlers|.
 
 EDITOR
 
@@ -292,6 +294,9 @@ PERFORMANCE
   inflight requests). This greatly improves performance with slow LSP servers.
 • 10x speedup for |vim.treesitter.foldexpr()| (when no parser exists for the
   buffer).
+• Strong |treesitter-query| caching makes repeat  |vim.treesitter.query.get()|
+  and |vim.treesitter.query.parse()| calls significantly faster for large
+  queries.
 
 PLUGINS
 
