@@ -475,13 +475,18 @@ function LanguageTree:_async_parse(range, on_parse)
     return
   end
 
-  local buf = vim.b[self._source]
+  local source = self._source
+  local buf = vim.b[source]
   local ct = buf.changedtick
   local total_parse_time = 0
   local redrawtime = vim.o.redrawtime
   local timeout = not vim.g._ts_force_sync_parsing and default_parse_timeout_ms or nil
 
   local function step()
+    if type(source) == 'number' and not vim.api.nvim_buf_is_valid(source) then
+      return nil
+    end
+
     -- If buffer was changed in the middle of parsing, reset parse state
     if buf.changedtick ~= ct then
       ct = buf.changedtick
@@ -953,7 +958,7 @@ end
 --- @private
 --- @return table<string, Range6[][]>
 function LanguageTree:_get_injections()
-  if not self._injection_query then
+  if not self._injection_query or #self._injection_query.captures == 0 then
     return {}
   end
 
