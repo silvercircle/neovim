@@ -379,6 +379,8 @@ TREESITTER
   activated by passing the `on_parse` callback parameter.
 • |vim.treesitter.query.set()| can now inherit and/or extend runtime file
   queries in addition to overriding.
+• |LanguageTree:is_valid()| now accepts a range parameter to narrow the scope
+  of the validity check.
 
 TUI
 
@@ -409,6 +411,11 @@ UI
 • |ui-messages| content chunks now also contain the highlight group ID.
 • |:checkhealth| can display in a floating window, controlled by the
   |g:health| variable.
+
+VIMSCRIPT
+
+• |getchar()| and |getcharstr()| have optional {opts} |Dict| argument to control:
+  cursor behavior, return type, and whether to simplify the returned key.
 
 ==============================================================================
 CHANGED FEATURES                                                 *news-changed*
