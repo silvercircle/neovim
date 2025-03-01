@@ -3017,10 +3017,10 @@ int inchar(uint8_t *buf, int maxlen, long wait_time)
   int retesc = false;  // Return ESC with gotint.
   const int tb_change_cnt = typebuf.tb_change_cnt;
 
-  //if (wait_time == -1 || wait_time > 100) {
+  if (wait_time == -1 || wait_time > 100) {
     // flush output before waiting
     ui_flush();
-  //}
+  }
 
   // Don't reset these when at the hit-return prompt, otherwise an endless
   // recursive loop may result (write error in swapfile, hit-return, timeout
@@ -3077,9 +3077,9 @@ int inchar(uint8_t *buf, int maxlen, long wait_time)
 
     // Always flush the output characters when getting input characters
     // from the user and not just peeking.
-    //if (wait_time == -1 || wait_time > 10) {
+    if (wait_time == -1 || wait_time > 10) {
       ui_flush();
-    //}
+    }
 
     // Fill up to a third of the buffer, because each character may be
     // tripled below.
