@@ -418,6 +418,10 @@ function M.is_arch(s)
   return s == architecture
 end
 
+function M.is_asan()
+  return M.paths.is_asan
+end
+
 local tmpname_id = 0
 local tmpdir = os.getenv('TMPDIR') or os.getenv('TEMP')
 local tmpdir_is_local = not not (tmpdir and tmpdir:find('Xtest'))
@@ -838,6 +842,10 @@ function M.skip_fragile(pending_fn, cond)
     return true
   end
   return false
+end
+
+function M.translations_enabled()
+  return M.paths.translations_enabled
 end
 
 return M
