@@ -1865,11 +1865,12 @@ local filename = {
   tidyrc = 'tidy',
   ['.tidyrc'] = 'tidy',
   ['.tmux.conf'] = 'tmux',
+  ['Cargo.lock'] = 'toml',
   ['/.cargo/config'] = 'toml',
+  ['/.cargo/credentials'] = 'toml',
   Pipfile = 'toml',
   ['Gopkg.lock'] = 'toml',
-  ['/.cargo/credentials'] = 'toml',
-  ['Cargo.lock'] = 'toml',
+  ['uv.lock'] = 'toml',
   ['.black'] = 'toml',
   black = detect_line1('tool%.black', 'toml', nil),
   ['trustees.conf'] = 'trustees',
@@ -2564,6 +2565,15 @@ local function normalize_path(path, as_pattern)
   return normal
 end
 
+local abspath = function(x)
+  return fn.fnamemodify(x, ':p')
+end
+if fn.has('win32') == 1 then
+  abspath = function(x)
+    return (fn.fnamemodify(x, ':p'):gsub('\\', '/'))
+  end
+end
+
 --- @class vim.filetype.add.filetypes
 --- @inlinedoc
 --- @field pattern? vim.filetype.mapping
@@ -2872,7 +2882,7 @@ function M.match(args)
     name = normalize_path(name)
 
     -- First check for the simple case where the full path exists as a key
-    local path = fn.fnamemodify(name, ':p')
+    local path = abspath(name)
     ft, on_detect = dispatch(filename[path], path, bufnr)
     if ft then
       return ft, on_detect
