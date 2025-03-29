@@ -1722,8 +1722,8 @@ vim.go.dex = vim.go.diffexpr
 --- 			none    Do not perform inline highlighting.
 --- 			simple  Highlight from first different
 --- 				character to the last one in each
---- 				line. This is the default if nothing
---- 				is set.
+--- 				line.  This is the default if no
+--- 				`inline:` value is set.
 --- 			char    Use internal diff to perform a
 --- 				character-wise diff and highlight the
 --- 				difference.
@@ -4801,6 +4801,17 @@ vim.o.pumheight = 0
 vim.o.ph = vim.o.pumheight
 vim.go.pumheight = vim.o.pumheight
 vim.go.ph = vim.go.pumheight
+
+--- Maximum width for the popup menu (`ins-completion-menu`).  When zero,
+--- there is no maximum width limit, otherwise the popup menu will never be
+--- wider than this value.  Truncated text will be indicated by "..." at the
+--- end.  Takes precedence over 'pumwidth'.
+---
+--- @type integer
+vim.o.pummaxwidth = 0
+vim.o.pmw = vim.o.pummaxwidth
+vim.go.pummaxwidth = vim.o.pummaxwidth
+vim.go.pmw = vim.go.pummaxwidth
 
 --- Minimum width for the popup menu (`ins-completion-menu`).  If the
 --- cursor column + 'pumwidth' exceeds screen width, the popup menu is

@@ -2279,8 +2279,8 @@ local options = {
         			none    Do not perform inline highlighting.
         			simple  Highlight from first different
         				character to the last one in each
-        				line. This is the default if nothing
-        				is set.
+        				line.  This is the default if no
+        				`inline:` value is set.
         			char    Use internal diff to perform a
         				character-wise diff and highlight the
         				difference.
@@ -6424,6 +6424,21 @@ local options = {
       short_desc = N_('maximum height of the popup menu'),
       type = 'number',
       varname = 'p_ph',
+    },
+    {
+      abbreviation = 'pmw',
+      defaults = 0,
+      desc = [=[
+        Maximum width for the popup menu (|ins-completion-menu|).  When zero,
+        there is no maximum width limit, otherwise the popup menu will never be
+        wider than this value.  Truncated text will be indicated by "..." at the
+        end.  Takes precedence over 'pumwidth'.
+      ]=],
+      full_name = 'pummaxwidth',
+      scope = { 'global' },
+      short_desc = N_('maximum width of the popup menu'),
+      type = 'number',
+      varname = 'p_pmw',
     },
     {
       abbreviation = 'pw',
