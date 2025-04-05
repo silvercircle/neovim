@@ -1729,7 +1729,10 @@ vim.go.dex = vim.go.diffexpr
 --- 				difference.
 --- 			word    Use internal diff to perform a
 --- 				`word`-wise diff and highlight the
---- 				difference.
+--- 				difference.  Non-alphanumeric
+--- 				multi-byte characters such as emoji
+--- 				and CJK characters are considered
+--- 				individual words.
 ---
 --- 	internal	Use the internal diff library.  This is
 --- 			ignored when 'diffexpr' is set.  *E960*
@@ -7886,13 +7889,13 @@ vim.wo.winbl = vim.wo.winblend
 
 --- Defines the default border style of floating windows. The default value
 --- is empty, which is equivalent to "none". Valid values include:
+--- - "bold": Bold line box.
+--- - "double": Double-line box.
 --- - "none": No border.
---- - "single": A single line box.
---- - "double": A double line box.
 --- - "rounded": Like "single", but with rounded corners ("╭" etc.).
+--- - "shadow": Drop shadow effect, by blending with the background.
+--- - "single": Single-line box.
 --- - "solid": Adds padding by a single whitespace cell.
---- - "shadow": A drop shadow effect by blending with the background.
---- - "bold": A bold line box.
 ---
 --- @type ''|'double'|'single'|'shadow'|'rounded'|'solid'|'bold'|'none'
 vim.o.winborder = ""
