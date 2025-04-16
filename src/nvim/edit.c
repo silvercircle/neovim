@@ -381,6 +381,12 @@ static int insert_check(VimState *state)
     did_cursorhold = false;
   }
 
+  // Check if we need to cancel completion mode because the window
+  // or tab page was changed
+  if (ins_compl_active() && !ins_compl_win_active(curwin)) {
+    ins_compl_cancel();
+  }
+
   // If the cursor was moved we didn't just insert a space
   if (arrow_used) {
     s->inserted_space = false;
@@ -3244,7 +3250,7 @@ static void ins_reg(void)
 
       do_put(regname, NULL, BACKWARD, 1,
              (literally == Ctrl_P ? PUT_FIXINDENT : 0) | PUT_CURSEND);
-    } else if (insert_reg(regname, literally) == FAIL) {
+    } else if (insert_reg(regname, NULL, literally) == FAIL) {
       vim_beep(kOptBoFlagRegister);
       need_redraw = true;  // remove the '"'
     } else if (stop_insert_mode) {
