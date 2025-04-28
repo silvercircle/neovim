@@ -1172,9 +1172,9 @@ struct window_S {
                      ///< this includes float border but excludes special columns
                      ///< implemented in win_line() (i.e. signs, folds, numbers)
 
-  // inner size of window, which can be overridden by external UI
-  int w_height_inner;
-  int w_width_inner;
+  // Size of the window viewport. This is the area usable to draw columns and buffer contents
+  int w_view_height;
+  int w_view_width;
   // external UI request. If non-zero, the inner size will use this.
   int w_height_request;
   int w_width_request;
@@ -1236,6 +1236,7 @@ struct window_S {
   // This is used for efficient redrawing.
   int w_lines_valid;                // number of valid entries
   wline_T *w_lines;
+  int w_lines_size;
 
   garray_T w_folds;                 // array of nested folds
   bool w_fold_manual;               // when true: some folds are opened/closed
@@ -1332,7 +1333,7 @@ struct window_S {
   int w_tagstackidx;                    // idx just below active entry
   int w_tagstacklen;                    // number of tags on stack
 
-  ScreenGrid w_grid;                    // the grid specific to the window
+  GridView w_grid;                      // area to draw on, excluding borders and winbar
   ScreenGrid w_grid_alloc;              // the grid specific to the window
   bool w_pos_changed;                   // true if window position changed
   bool w_floating;                      ///< whether the window is floating
