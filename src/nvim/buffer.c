@@ -1954,7 +1954,7 @@ buf_T *buflist_new(char *ffname_arg, char *sfname_arg, linenr_T lnum, int flags)
     pmap_put(int)(&buffer_handles, buf->b_fnum, buf);
     if (top_file_num < 0) {  // wrap around (may cause duplicates)
       emsg(_("W14: Warning: List of file names overflow"));
-      if (emsg_silent == 0 && !in_assert_fails) {
+      if (emsg_silent == 0 && !in_assert_fails && !ui_has(kUIMessages)) {
         ui_flush();
         os_delay(3001, true);  // make sure it is noticed
       }
@@ -2083,6 +2083,7 @@ void free_buf_options(buf_T *buf, bool free_p_ff)
   clear_string_option(&buf->b_p_cinw);
   clear_string_option(&buf->b_p_cot);
   clear_string_option(&buf->b_p_cpt);
+  clear_string_option(&buf->b_p_ise);
   clear_string_option(&buf->b_p_cfu);
   callback_free(&buf->b_cfu_cb);
   clear_string_option(&buf->b_p_ofu);

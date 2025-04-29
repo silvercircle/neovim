@@ -558,6 +558,7 @@ struct file_buffer {
   char *b_p_fo;                 ///< 'formatoptions'
   char *b_p_flp;                ///< 'formatlistpat'
   int b_p_inf;                  ///< 'infercase'
+  char *b_p_ise;                ///< 'isexpand' local value
   char *b_p_isk;                ///< 'iskeyword'
   char *b_p_def;                ///< 'define' local value
   char *b_p_inc;                ///< 'include'
@@ -995,6 +996,7 @@ typedef struct {
   bool noautocmd;
   bool fixed;
   bool hide;
+  int _cmdline_offset;
 } WinConfig;
 
 #define WIN_CONFIG_INIT ((WinConfig){ .height = 0, .width = 0, \
@@ -1008,7 +1010,8 @@ typedef struct {
                                       .style = kWinStyleUnused, \
                                       .noautocmd = false, \
                                       .hide = false, \
-                                      .fixed = false })
+                                      .fixed = false, \
+                                      ._cmdline_offset = INT_MAX })
 
 // Structure to store last cursor position and topline.  Used by check_lnums()
 // and reset_lnums().
