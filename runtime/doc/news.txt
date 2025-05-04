@@ -109,6 +109,8 @@ API
 • |vim.secure.read()| now returns `true` for trusted directories. Previously
   it would return `nil`, which made it impossible to tell if the directory was
   actually trusted.
+• Added |vim.lsp.is_enabled()| to check if a given LSP config has been enabled
+  by |vim.lsp.enable()|.
 
 BUILD
 
@@ -150,6 +152,7 @@ LUA
 
 • Lua type annotations for `vim.uv`.
 • |vim.hl.range()| now allows multiple timed highlights.
+• |vim.tbl_extend()| and |vim.tbl_deep_extend()| now accept a function behavior argument.
 
 OPTIONS
 
@@ -195,6 +198,9 @@ UI
 • |ui-multigrid| provides composition information and absolute coordinates.
 • `vim._extui` provides an experimental commandline and message UI intended to
   replace the message grid in the TUI.
+• Error messages are more concise:
+  • "Error detected while processing:" changed to "Error in:".
+  • "Error executing Lua:" changed to "Lua:".
 
 VIMSCRIPT
 

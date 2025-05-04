@@ -1036,6 +1036,20 @@ describe('lua stdlib', function()
       return c.x.a == 1 and c.x.b == 2 and c.x.c == nil and count == 1
     ]]))
 
+    ok(exec_lua([[
+      local a = { a = 1, b = 2, c = 1 }
+      local b = { a = -1, b = 5, c = 3, d = 4 }
+      -- Return the maximum value for each key.
+      local c = vim.tbl_extend(function(k, v, prev_v)
+        if prev_v then
+          return v > prev_v and v or prev_v
+        else
+          return v
+        end
+      end, a, b)
+      return vim.deep_equal(c, { a = 1, b = 5, c = 3, d = 4 })
+    ]]))
+
     matches(
       'invalid "behavior": nil',
       pcall_err(
@@ -1175,6 +1189,20 @@ describe('lua stdlib', function()
       local b = { sub = { 'b', 'c' } }
       local c = vim.tbl_deep_extend('force', a, b)
       return vim.deep_equal(c, { sub = { 'b', 'c' } })
+    ]]))
+
+    ok(exec_lua([[
+      local a = { a = 1, b = 2, c = { d = 1, e = -2} }
+      local b = { a = -1, b = 5, c = { d = 6 } }
+      -- Return the maximum value for each key.
+      local c = vim.tbl_deep_extend(function(k, v, prev_v)
+        if prev_v then
+          return v > prev_v and v or prev_v
+        else
+          return v
+        end
+      end, a, b)
+      return vim.deep_equal(c, { a = 1, b = 5, c = { d = 6, e = -2 } })
     ]]))
 
     matches('invalid "behavior": nil', pcall_err(exec_lua, [[return vim.tbl_deep_extend()]]))
@@ -3348,7 +3376,7 @@ describe('lua stdlib', function()
       local errmsg = api.nvim_get_vvar('errmsg')
       matches(
         [[
-^Error executing vim%.on%_key%(%) callbacks:.*
+^vim%.on%_key%(%) callbacks:.*
 With ns%_id %d+: .*: Dumb Error
 stack traceback:
 .*: in function 'error'
@@ -3478,19 +3506,13 @@ stack traceback:
 
       api.nvim_buf_set_lines(0, 0, -1, true, { '54321' })
 
-      local function cleanup_msg(msg)
-        return msg:gsub('^Error .*\nWith ns%_id %d+: ', '')
-      end
-
       feed('x')
       eq(1, exec_lua [[ return n_call ]])
-
       eq(1, exec_lua [[ return vim.on_key(nil, nil) ]])
-
-      eq('', cleanup_msg(eval('v:errmsg')))
+      eq('', eval('v:errmsg'))
       feed('x')
       eq(2, exec_lua [[ return n_call ]])
-      eq('return string must be empty', cleanup_msg(eval('v:errmsg')))
+      matches('return string must be empty', eval('v:errmsg'))
       command('let v:errmsg = ""')
 
       eq(0, exec_lua [[ return vim.on_key(nil, nil) ]])
@@ -3498,7 +3520,7 @@ stack traceback:
       feed('x')
       eq(2, exec_lua [[ return n_call ]])
       expect('21')
-      eq('', cleanup_msg(eval('v:errmsg')))
+      eq('', eval('v:errmsg'))
     end)
   end)
 
@@ -3963,7 +3985,7 @@ stack traceback:
         pcall_err(exec_lua, [[vim.api.nvim_win_call(0, function() vim.cmd 'fooooo' end)]])
       )
       eq(
-        'Error executing lua: [string "<nvim>"]:0: fooooo',
+        'Lua: [string "<nvim>"]:0: fooooo',
         pcall_err(exec_lua, [[vim.api.nvim_win_call(0, function() error('fooooo') end)]])
       )
     end)

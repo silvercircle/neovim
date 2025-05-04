@@ -1087,6 +1087,15 @@ get_log_path()                                        *vim.lsp.get_log_path()*
     Return: ~
         (`string`) path to log file
 
+is_enabled({name})                                      *vim.lsp.is_enabled()*
+    Checks if the given LSP config is enabled (globally, not per-buffer).
+
+    Parameters: ~
+      • {name}  (`string`) Config name
+
+    Return: ~
+        (`boolean`)
+
 omnifunc({findstart}, {base})                             *vim.lsp.omnifunc()*
     Implements 'omnifunc' compatible LSP completion.
 
@@ -2203,14 +2212,11 @@ enable({enable}, {bufnr}, {opts})            *vim.lsp.document_color.enable()*
     Enables document highlighting from the given language client in the given
     buffer.
 
-    You can enable document highlighting from a supporting client as follows: >lua
+    You can enable document highlighting when a client attaches to a buffer as
+    follows: >lua
         vim.api.nvim_create_autocmd('LspAttach', {
           callback = function(args)
-            local client = vim.lsp.get_client_by_id(args.data.client_id)
-
-            if client:supports_method('textDocument/documentColor') then
-              vim.lsp.document_color.enable(true, args.buf)
-            end
+            vim.lsp.document_color.enable(true, args.buf)
           end
         })
 <
