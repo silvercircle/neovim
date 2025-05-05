@@ -1040,7 +1040,7 @@ describe('lua stdlib', function()
       local a = { a = 1, b = 2, c = 1 }
       local b = { a = -1, b = 5, c = 3, d = 4 }
       -- Return the maximum value for each key.
-      local c = vim.tbl_extend(function(k, v, prev_v)
+      local c = vim.tbl_extend(function(k, prev_v, v)
         if prev_v then
           return v > prev_v and v or prev_v
         else
@@ -1195,7 +1195,7 @@ describe('lua stdlib', function()
       local a = { a = 1, b = 2, c = { d = 1, e = -2} }
       local b = { a = -1, b = 5, c = { d = 6 } }
       -- Return the maximum value for each key.
-      local c = vim.tbl_deep_extend(function(k, v, prev_v)
+      local c = vim.tbl_deep_extend(function(k, prev_v, v)
         if prev_v then
           return v > prev_v and v or prev_v
         else
@@ -1556,10 +1556,15 @@ describe('lua stdlib', function()
       pcall_err(exec_lua, "vim.validate('arg1', nil, {'number', 'string'})")
     )
 
-    -- Pass an additional message back.
+    -- Validator func can return an extra "Info" message.
     matches(
       'arg1: expected %?, got 3. Info: TEST_MSG',
       pcall_err(exec_lua, "vim.validate('arg1', 3, function(a) return a == 1, 'TEST_MSG' end)")
+    )
+    -- Caller can override the "expected" message.
+    eq(
+      'arg1: expected TEST_MSG, got nil',
+      pcall_err(exec_lua, "vim.validate('arg1', nil, 'table', 'TEST_MSG')")
     )
   end)
 
