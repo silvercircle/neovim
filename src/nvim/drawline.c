@@ -508,7 +508,7 @@ void fill_foldcolumn(win_T *wp, foldinfo_T foldinfo, linenr_T lnum, int attr, in
       symbol = wp->w_p_fcs_chars.foldlevel == ' ' ?  schar_from_ascii('0' + first_level + i) : wp->w_p_fcs_chars.foldlevel;
       //symbol = schar_from_ascii('0' + first_level + i);
     } else {
-      symbol = schar_from_ascii('>');
+      symbol = wp->w_p_fcs_chars.foldlevel == ' ' ? schar_from_ascii('>') : wp->w_p_fcs_chars.foldlevel;
     }
 
     int vcol = i >= level ? -1 : (i == closedcol - 1 && closed) ? -2 : -3;
