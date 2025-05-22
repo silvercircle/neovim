@@ -115,8 +115,8 @@ end
 --- (default: current buffer)
 --- @field bufnr? integer
 ---
---- Limit diagnostics to the given namespace
---- @field namespace? integer
+--- Limit diagnostics to the given namespace(s).
+--- @field namespace? integer|integer[]
 ---
 --- Show diagnostics from the whole buffer (`buffer"`, the current cursor line
 --- (`line`), or the current cursor position (`cursor`). Shorthand versions
@@ -742,7 +742,7 @@ local registered_autocmds = {}
 
 local function make_augroup_key(namespace, bufnr)
   local ns = M.get_namespace(namespace)
-  return string.format('DiagnosticInsertLeave:%s:%s', bufnr, ns.name)
+  return string.format('nvim.diagnostic.insertleave.%s.%s', bufnr, ns.name)
 end
 
 --- @param namespace integer
