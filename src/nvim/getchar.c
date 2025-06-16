@@ -3009,7 +3009,7 @@ int inchar(uint8_t *buf, int maxlen, long wait_time)
   int retesc = false;  // Return ESC with gotint.
   const int tb_change_cnt = typebuf.tb_change_cnt;
 
-  if (wait_time == -1 || wait_time > 1) {
+  if (wait_time == -1 || wait_time >= 0) {
     // flush output before waiting
     ui_flush();
   }
@@ -3069,7 +3069,7 @@ int inchar(uint8_t *buf, int maxlen, long wait_time)
 
     // Always flush the output characters when getting input characters
     // from the user and not just peeking.
-    if (wait_time == -1 || wait_time > 1) {
+    if (wait_time == -1 || wait_time >= 0) {
       ui_flush();
     }
 
