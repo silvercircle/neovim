@@ -162,14 +162,13 @@ local constants = {
     MethodNotFound = -32601,
     InvalidParams = -32602,
     InternalError = -32603,
-    serverErrorStart = -32099,
-    serverErrorEnd = -32000,
     ServerNotInitialized = -32002,
     UnknownErrorCode = -32001,
     -- Defined by the protocol.
     RequestCancelled = -32800,
     ContentModified = -32801,
     ServerCancelled = -32802,
+    RequestFailed = -32803,
   },
 
   -- Describes the content type that a client supports in various
@@ -431,6 +430,7 @@ function protocol.make_client_capabilities()
           properties = { 'edit', 'command' },
         },
         disabledSupport = true,
+        honorsChangeAnnotations = true,
       },
       codeLens = {
         dynamicRegistration = false,
@@ -529,6 +529,7 @@ function protocol.make_client_capabilities()
       rename = {
         dynamicRegistration = true,
         prepareSupport = true,
+        honorsChangeAnnotations = true,
       },
       publishDiagnostics = {
         tagSupport = {
@@ -562,6 +563,7 @@ function protocol.make_client_capabilities()
       workspaceEdit = {
         resourceOperations = { 'rename', 'create', 'delete' },
         normalizesLineEndings = true,
+        changeAnnotationSupport = { groupsOnLabel = true },
       },
       semanticTokens = {
         refreshSupport = true,

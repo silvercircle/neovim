@@ -4379,17 +4379,15 @@ static void f_line(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     if (wp != NULL && tp != NULL) {
       switchwin_T switchwin;
       if (switch_win_noblock(&switchwin, wp, tp, true) == OK) {
-        // in diff mode, prevent that the window scrolls
-        // and keep the topline
-        if (curwin->w_p_diff && switchwin.sw_curwin->w_p_diff) {
+        // With 'splitkeep' != cursor and in diff mode, prevent that the
+        // window scrolls and keep the topline.
+        if (*p_spk != 'c' || (curwin->w_p_diff && switchwin.sw_curwin->w_p_diff)) {
           skip_update_topline = true;
         }
         check_cursor(curwin);
         fp = var2fpos(&argvars[0], true, &fnum, false);
       }
-      if (curwin->w_p_diff && switchwin.sw_curwin->w_p_diff) {
-        skip_update_topline = false;
-      }
+      skip_update_topline = false;
       restore_win_noblock(&switchwin, true);
     }
   } else {
@@ -5362,6 +5360,26 @@ static void f_prompt_setprompt(typval_T *argvars, typval_T *rettv, EvalFuncData 
   const char *text = tv_get_string(&argvars[1]);
   xfree(buf->b_prompt_text);
   buf->b_prompt_text = xstrdup(text);
+}
+
+/// "prompt_getinput({buffer})" function
+static void f_prompt_getinput(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+  FUNC_ATTR_NONNULL_ALL
+{
+  // return an empty string by default, e.g. it's not a prompt buffer
+  rettv->v_type = VAR_STRING;
+  rettv->vval.v_string = NULL;
+
+  buf_T *const buf = tv_get_buf_from_arg(&argvars[0]);
+  if (buf == NULL) {
+    return;
+  }
+
+  if (!bt_prompt(buf)) {
+    return;
+  }
+
+  rettv->vval.v_string = prompt_get_input(buf);
 }
 
 /// "pum_getpos()" function

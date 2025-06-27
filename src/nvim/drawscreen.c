@@ -264,6 +264,9 @@ void screenclear(void)
     msg_grid_invalid = false;
     clear_cmdline = true;
   }
+  if (ui_has(kUIMessages)) {
+    ui_call_msg_clear();
+  }
 }
 
 /// Unlike cmdline "one_key" prompts, the message part of the prompt is not stored
@@ -552,7 +555,6 @@ int update_screen(void)
   }
 
   win_ui_flush(true);
-  msg_ext_check_clear();
 
   // reset cmdline_row now (may have been changed temporarily)
   compute_cmdrow();
@@ -964,10 +966,6 @@ bool skip_showmode(void)
 int showmode(void)
 {
   int length = 0;
-
-  if (ui_has(kUIMessages) && clear_cmdline) {
-    msg_ext_clear(true);
-  }
 
   // Don't make non-flushed message part of the showmode.
   msg_ext_ui_flush();

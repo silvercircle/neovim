@@ -556,6 +556,7 @@ static void may_do_incsearch_highlighting(int firstc, int count, incsearch_state
     curwin->w_cursor = s->search_start;
   } else if (found != 0) {
     curwin->w_cursor = end_pos;
+    curwin->w_valid_cursor = end_pos;  // mark as valid for cmdline_show redraw
   }
 
   msg_starthere();
@@ -750,9 +751,6 @@ static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear
     gotocmdline(true);
     redrawcmdprompt();          // draw prompt or indent
     ccline.cmdspos = cmd_startcol();
-    if (!msg_scroll) {
-      msg_ext_clear(false);
-    }
   }
   s->xpc.xp_context = EXPAND_NOTHING;
   s->xpc.xp_backslash = XP_BS_NONE;
@@ -964,7 +962,6 @@ theend:
 
   if (ui_has(kUICmdline)) {
     ui_ext_cmdline_hide(s->gotesc);
-    msg_ext_clear_later();
   }
   if (!cmd_silent) {
     redraw_custom_title_later();

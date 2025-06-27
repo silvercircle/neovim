@@ -81,12 +81,13 @@ the options are empty or were set by the builtin runtime (ftplugin) files. The
 options are not restored when the LSP client is stopped or detached.
 
 GLOBAL DEFAULTS
-                                *grr* *gra* *grn* *gri* *i_CTRL-S* *an* *in*
+                                *grr* *gra* *grn* *gri* *grt* *i_CTRL-S* *an* *in*
 These GLOBAL keymaps are created unconditionally when Nvim starts:
 - "grn" is mapped in Normal mode to |vim.lsp.buf.rename()|
 - "gra" is mapped in Normal and Visual mode to |vim.lsp.buf.code_action()|
 - "grr" is mapped in Normal mode to |vim.lsp.buf.references()|
 - "gri" is mapped in Normal mode to |vim.lsp.buf.implementation()|
+- "grt" is mapped in Normal mode to |vim.lsp.buf.type_definition()|
 - "gO" is mapped in Normal mode to |vim.lsp.buf.document_symbol()|
 - CTRL-S is mapped in Insert mode to |vim.lsp.buf.signature_help()|
 - "an" and "in" are mapped in Visual mode to outer and inner incremental
@@ -2334,7 +2335,8 @@ Lua module: vim.lsp.util                                            *lsp-util*
 
 
                                      *vim.lsp.util.apply_text_document_edit()*
-apply_text_document_edit({text_document_edit}, {index}, {position_encoding})
+apply_text_document_edit({text_document_edit}, {index}, {position_encoding},
+                         {change_annotations})
     Applies a `TextDocumentEdit`, which is a list of changes to a single
     document.
 
@@ -2343,18 +2345,21 @@ apply_text_document_edit({text_document_edit}, {index}, {position_encoding})
       • {index}               (`integer?`) Optional index of the edit, if from
                               a list of edits (or nil, if not from a list)
       • {position_encoding}   (`'utf-8'|'utf-16'|'utf-32'?`)
+      • {change_annotations}  (`table<string, lsp.ChangeAnnotation>?`)
 
     See also: ~
       • https://microsoft.github.io/language-server-protocol/specifications/specification-current/#textDocumentEdit
 
                                              *vim.lsp.util.apply_text_edits()*
-apply_text_edits({text_edits}, {bufnr}, {position_encoding})
+apply_text_edits({text_edits}, {bufnr}, {position_encoding},
+                 {change_annotations})
     Applies a list of text edits to a buffer.
 
     Parameters: ~
-      • {text_edits}         (`lsp.TextEdit[]`)
-      • {bufnr}              (`integer`) Buffer id
-      • {position_encoding}  (`'utf-8'|'utf-16'|'utf-32'`)
+      • {text_edits}          (`(lsp.TextEdit|lsp.AnnotatedTextEdit)[]`)
+      • {bufnr}               (`integer`) Buffer id
+      • {position_encoding}   (`'utf-8'|'utf-16'|'utf-32'`)
+      • {change_annotations}  (`table<string, lsp.ChangeAnnotation>?`)
 
     See also: ~
       • https://microsoft.github.io/language-server-protocol/specifications/specification-current/#textEdit
