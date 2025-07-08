@@ -72,6 +72,7 @@ EVENTS
   emitted after the screen is cleared. These events arbitrarily assumed a
   message UI that mimicks the legacy message grid. Benefit: reduced UI event
   traffic and more flexibility for UIs.
+  The `msg_history_show` event has an additional "prev_cmd" argument.
 • A new `empty` message kind is emitted for an empty (e.g. `:echo ""`) message.
 
 HIGHLIGHTS
@@ -196,6 +197,9 @@ LSP
   receives the resolved config as the second arg: `cmd(dispatchers, config)`.
 • Support for annotated text edits.
 • `:checkhealth vim.lsp` is now available to check which buffers the active LSP features are attached to.
+• LSP `DiagnosticRelatedInformation` is now shown in
+  |vim.diagnostic.open_float()|. It is read from the LSP diagnostic object
+  stored in the `user_data` field.
 
 LUA
 
