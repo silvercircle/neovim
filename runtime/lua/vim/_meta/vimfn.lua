@@ -7964,12 +7964,20 @@ function vim.fn.searchpos(pattern, flags, stopline, timeout, skip) end
 
 --- Returns a list of server addresses, or empty if all servers
 --- were stopped. |serverstart()| |serverstop()|
+---
+--- The optional argument {opts} is a Dict and supports the following items:
+---
+---   peer  : If |TRUE|, servers not started by |serverstart()|
+---           will also be returned. (default: |FALSE|)
+---           Not supported on Windows yet.
+---
 --- Example: >vim
 ---   echo serverlist()
 --- <
 ---
+--- @param opts? table
 --- @return string[]
-function vim.fn.serverlist() end
+function vim.fn.serverlist(opts) end
 
 --- Opens a socket or named pipe at {address} and listens for
 --- |RPC| messages. Clients can send |API| commands to the
@@ -10620,6 +10628,8 @@ function vim.fn.undofile(name) end
 --- @return vim.fn.undotree.ret
 function vim.fn.undotree(buf) end
 
+--- Note: Prefer |vim.list.unique()| in Lua.
+---
 --- Remove second and succeeding copies of repeated adjacent
 --- {list} items in-place.  Returns {list}.  If you want a list
 --- to remain unmodified make a copy first: >vim
