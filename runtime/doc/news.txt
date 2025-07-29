@@ -171,6 +171,8 @@ EDITOR
   commands.
 • 'wildchar' now enables completion in search contexts using |/|, |?|, |:g|, |:v|
    and |:vimgrep| commands.
+• For security, 'exrc' no longer shows an "(a)llow" choice. Instead you must
+  "(v)iew" then run `:trust`.
 
 EVENTS
 
@@ -274,7 +276,7 @@ TERMINAL
 
 TREESITTER
 
-• todo
+• |:EditQuery| command gained tab-completion, works with injected languages.
 
 TUI
 
