@@ -58,6 +58,7 @@
 #include "nvim/file_search.h"
 #include "nvim/fileio.h"
 #include "nvim/fold.h"
+#include "nvim/fuzzy.h"
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
 #include "nvim/getchar.h"
@@ -100,7 +101,6 @@
 #include "nvim/regexp_defs.h"
 #include "nvim/runtime.h"
 #include "nvim/runtime_defs.h"
-#include "nvim/search.h"
 #include "nvim/spell.h"
 #include "nvim/state_defs.h"
 #include "nvim/statusline.h"
@@ -115,9 +115,7 @@
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
 
-#ifdef INCLUDE_GENERATED_DECLARATIONS
-# include "buffer.c.generated.h"
-#endif
+#include "buffer.c.generated.h"
 
 static const char e_attempt_to_delete_buffer_that_is_in_use_str[]
   = N_("E937: Attempt to delete a buffer that is in use: %s");
@@ -2477,12 +2475,12 @@ int ExpandBufnames(char *pat, int *num_file, char ***file, int options)
       } else {
         p = NULL;
         // first try matching with the short file name
-        if ((score = fuzzy_match_str(buf->b_sfname, pat)) != 0) {
+        if ((score = fuzzy_match_str(buf->b_sfname, pat)) != FUZZY_SCORE_NONE) {
           p = buf->b_sfname;
         }
         if (p == NULL) {
           // next try matching with the full path file name
-          if ((score = fuzzy_match_str(buf->b_ffname, pat)) != 0) {
+          if ((score = fuzzy_match_str(buf->b_ffname, pat)) != FUZZY_SCORE_NONE) {
             p = buf->b_ffname;
           }
         }

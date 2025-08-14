@@ -21,8 +21,7 @@
 #include "nvim/eval/typval.h"
 #include "nvim/ex_cmds.h"
 #include "nvim/ex_cmds_defs.h"
-#include "nvim/extmark.h"
-#include "nvim/extmark_defs.h"
+#include "nvim/fuzzy.h"
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
 #include "nvim/getchar.h"
@@ -33,22 +32,18 @@
 #include "nvim/highlight_defs.h"
 #include "nvim/insexpand.h"
 #include "nvim/keycodes.h"
-#include "nvim/mark.h"
 #include "nvim/mbyte.h"
-#include "nvim/memline.h"
 #include "nvim/memory.h"
 #include "nvim/memory_defs.h"
 #include "nvim/menu.h"
 #include "nvim/message.h"
 #include "nvim/move.h"
-#include "nvim/ops.h"
 #include "nvim/option.h"
 #include "nvim/option_defs.h"
 #include "nvim/option_vars.h"
 #include "nvim/plines.h"
 #include "nvim/popupmenu.h"
 #include "nvim/pos_defs.h"
-#include "nvim/search.h"
 #include "nvim/state_defs.h"
 #include "nvim/strings.h"
 #include "nvim/types_defs.h"
@@ -86,9 +81,7 @@ static bool pum_is_drawn = false;
 static bool pum_external = false;
 static bool pum_invalid = false;  // the screen was just cleared
 
-#ifdef INCLUDE_GENERATED_DECLARATIONS
-# include "popupmenu.c.generated.h"
-#endif
+#include "popupmenu.c.generated.h"
 #define PUM_DEF_HEIGHT 10
 
 static void pum_compute_size(void)
