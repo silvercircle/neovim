@@ -42,7 +42,7 @@ Capability.all[Completor.name] = Completor
 function Completor:new(bufnr)
   self = Capability.new(self, bufnr)
   self.client_state = {}
-  api.nvim_create_autocmd({ 'InsertEnter', 'CursorMovedI', 'CursorHoldI' }, {
+  api.nvim_create_autocmd({ 'InsertEnter', 'CursorMovedI', 'TextChangedP' }, {
     group = self.augroup,
     callback = function()
       self:automatic_request()
@@ -304,7 +304,7 @@ function Completor:apply()
         range.end_.col,
         lines
       )
-      local pos = current.range.start:to_cursor()
+      local pos = range.start:to_cursor()
       api.nvim_win_set_cursor(vim.fn.bufwinid(self.bufnr), {
         pos[1] + #lines - 1,
         (#lines == 1 and pos[2] or 0) + #lines[#lines],
@@ -373,7 +373,7 @@ function M.select(opts)
   end
 
   local count = opts.count or vim.v.count1
-  local wrap = opts.wrap or true
+  local wrap = opts.wrap ~= false
 
   local current = completor.current
   if not current then
