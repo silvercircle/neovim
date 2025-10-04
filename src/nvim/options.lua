@@ -2985,6 +2985,9 @@ local options = {
           foldopen	'-'		mark the beginning of a fold
           foldclose	'+'		show a closed fold
           foldsep	'│' or '|'      open fold middle marker
+          foldinner	none		character to show instead of the
+        				numeric foldlevel when it would be
+        				repeated in a narrow 'foldcolumn'
           diff		'-'		deleted lines of the 'diff' option
           msgsep	' '		message separator 'display'
           eob		'~'		empty lines at the end of a buffer

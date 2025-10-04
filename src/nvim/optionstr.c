@@ -2117,6 +2117,7 @@ static const struct chars_tab fcs_tab[] = {
   CHARSTAB_ENTRY(&fcs_chars.foldopen,   "foldopen",  "-", NULL),
   CHARSTAB_ENTRY(&fcs_chars.foldclosed, "foldclose", "+", NULL),
   CHARSTAB_ENTRY(&fcs_chars.foldsep,    "foldsep",   "│", "|"),
+  CHARSTAB_ENTRY(&fcs_chars.foldinner,  "foldinner", NULL, NULL),
   CHARSTAB_ENTRY(&fcs_chars.diff,       "diff",      "-", NULL),
   CHARSTAB_ENTRY(&fcs_chars.msgsep,     "msgsep",    " ", NULL),
   CHARSTAB_ENTRY(&fcs_chars.eob,        "eob",       "~", NULL),
