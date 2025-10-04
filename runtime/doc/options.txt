@@ -2861,6 +2861,9 @@ A jump table for the options with a short description can be found at |Q_op|.
 	  foldopen	'-'		mark the beginning of a fold
 	  foldclose	'+'		show a closed fold
 	  foldsep	'│' or '|'      open fold middle marker
+	  foldinner	none		character to show instead of the
+					numeric foldlevel when it would be
+					repeated in a narrow 'foldcolumn'
 	  foldlevel     ' '             placeholder for fold level number
 	  diff		'-'		deleted lines of the 'diff' option
 	  msgsep	' '		message separator 'display'
