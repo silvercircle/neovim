@@ -3,6 +3,7 @@
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
+#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -437,10 +438,13 @@ static int nlua_wait(lua_State *lstate)
     return luaL_error(lstate, e_fast_api_disabled, "vim.wait");
   }
 
-  intptr_t timeout = luaL_checkinteger(lstate, 1);
-  if (timeout < 0) {
+  double timeout_number = luaL_checknumber(lstate, 1);
+  if (timeout_number < 0) {
     return luaL_error(lstate, "timeout must be >= 0");
   }
+  int64_t timeout = (isnan(timeout_number) || timeout_number > (double)INT64_MAX)
+                    ? INT64_MAX
+                    : (int64_t)timeout_number;
 
   int lua_top = lua_gettop(lstate);
 
@@ -496,7 +500,7 @@ static int nlua_wait(lua_State *lstate)
 
   LOOP_PROCESS_EVENTS_UNTIL(&main_loop,
                             loop_events,
-                            (int)timeout,
+                            timeout,
                             got_int || (is_function ? nlua_wait_condition(lstate,
                                                                           &pcall_status,
                                                                           &callback_result)
