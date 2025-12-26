@@ -145,6 +145,7 @@ static void au_show_for_all_events(int group, const char *pat)
 }
 
 static void au_show_for_event(int group, event_T event, const char *pat)
+  FUNC_ATTR_NONNULL_ALL
 {
   AutoCmdVec *const acs = &autocmds[(int)event];
   // Return early if there are no autocmds for this event
@@ -152,10 +153,23 @@ static void au_show_for_event(int group, event_T event, const char *pat)
     return;
   }
 
-  char buflocal_pat[BUFLOCAL_PAT_LEN];  // for "<buffer=X>"
-  int patlen;
+  // Empty pattern shows all autocommands for this event
+  int patlen = 0;
   if (*pat != NUL) {
-    patlen = (int)aucmd_pattern_length(pat);
+    patlen = (int)aucmd_span_pattern(pat, &pat);
+    if (patlen == 0) {  // Don't show if it contains only commas
+      return;
+    }
+  }
+
+  char buflocal_pat[BUFLOCAL_PAT_LEN];  // for "<buffer=X>"
+  int last_group = AUGROUP_ERROR;
+  const char *last_group_name = NULL;
+
+  // Loop through all the specified patterns.
+  do {
+    AutoPat *last_ap = NULL;
+    const char *endpat = pat + patlen;
 
     // detect special <buffer[=X]> buffer-local patterns
     if (aupat_is_buflocal(pat, patlen)) {
@@ -164,21 +178,6 @@ static void au_show_for_event(int group, event_T event, const char *pat)
       pat = buflocal_pat;
       patlen = (int)strlen(buflocal_pat);
     }
-
-    if (patlen == 0) {
-      return;
-    }
-    assert(*pat != NUL);
-  } else {
-    pat = NULL;
-    patlen = 0;
-  }
-
-  // Loop through all the specified patterns.
-  while (true) {
-    AutoPat *last_ap = NULL;
-    int last_group = AUGROUP_ERROR;
-    const char *last_group_name = NULL;
 
     for (size_t i = 0; i < kv_size(*acs); i++) {
       AutoCmd *const ac = &kv_A(*acs, i);
@@ -195,7 +194,7 @@ static void au_show_for_event(int group, event_T event, const char *pat)
       // For <buffer[=X]>, this condition works because we normalize
       // all buffer-local patterns.
       if ((group != AUGROUP_ALL && ac->pat->group != group)
-          || (pat != NULL
+          || (patlen
               && (ac->pat->patlen != patlen || strncmp(pat, ac->pat->pat, (size_t)patlen) != 0))) {
         continue;
       }
@@ -280,17 +279,8 @@ static void au_show_for_event(int group, event_T event, const char *pat)
       }
     }
 
-    // If a pattern is provided, find next pattern. Otherwise exit after single iteration.
-    if (pat != NULL) {
-      pat = aucmd_next_pattern(pat, (size_t)patlen);
-      patlen = (int)aucmd_pattern_length(pat);
-      if (patlen == 0) {
-        break;
-      }
-    } else {
-      break;
-    }
-  }
+    patlen = (int)aucmd_span_pattern(endpat, &pat);
+  } while (patlen);
 }
 
 // Delete autocommand.
@@ -915,8 +905,10 @@ int do_autocmd_event(event_T event, const char *pat, bool once, int nested, cons
   }
 
   // Loop through all the specified patterns.
-  int patlen = (int)aucmd_pattern_length(pat);
+  int patlen = (int)aucmd_span_pattern(pat, &pat);
   while (patlen) {
+    const char *endpat = pat + patlen;
+
     // detect special <buffer[=X]> buffer-local patterns
     bool is_buflocal = aupat_is_buflocal(pat, patlen);
     if (is_buflocal) {
@@ -959,8 +951,7 @@ int do_autocmd_event(event_T event, const char *pat, bool once, int nested, cons
       autocmd_register(0, event, pat, patlen, group, once, nested, NULL, cmd, &handler_fn);
     }
 
-    pat = aucmd_next_pattern(pat, (size_t)patlen);
-    patlen = (int)aucmd_pattern_length(pat);
+    patlen = (int)aucmd_span_pattern(endpat, &pat);
   }
 
   au_cleanup();  // may really delete removed patterns/commands now
@@ -1098,46 +1089,28 @@ int autocmd_register(int64_t id, event_T event, const char *pat, int patlen, int
   return OK;
 }
 
-size_t aucmd_pattern_length(const char *pat)
-  FUNC_ATTR_PURE
+size_t aucmd_span_pattern(const char *pat, const char **start)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (*pat == NUL) {
-    return 0;
+  // Skip leading commas.
+  while (*pat == ',') {
+    pat++;
   }
 
-  const char *endpat;
-
-  for (; *pat; pat = endpat + 1) {
-    // Find end of the pattern.
-    // Watch out for a comma in braces, like "*.\{obj,o\}".
-    endpat = pat;
-    // ignore single comma
-    if (*endpat == ',') {
-      continue;
+  // Find end of the pattern.
+  // Watch out for a comma in braces, like "*.\{obj,o\}".
+  const char *p = pat;
+  int brace_level = 0;
+  for (; *p && (*p != ',' || brace_level || (p > pat && p[-1] == '\\')); p++) {
+    if (*p == '{') {
+      brace_level++;
+    } else if (*p == '}') {
+      brace_level--;
     }
-    int brace_level = 0;
-    for (; *endpat && (*endpat != ',' || brace_level || endpat[-1] == '\\'); endpat++) {
-      if (*endpat == '{') {
-        brace_level++;
-      } else if (*endpat == '}') {
-        brace_level--;
-      }
-    }
-
-    return (size_t)(endpat - pat);
   }
 
-  return strlen(pat);
-}
-
-const char *aucmd_next_pattern(const char *pat, size_t patlen)
-  FUNC_ATTR_PURE
-{
-  pat = pat + patlen;
-  if (*pat == ',') {
-    pat = pat + 1;
-  }
-  return pat;
+  *start = pat;
+  return (size_t)(p - pat);
 }
 
 /// Implementation of ":doautocmd [group] event [fname]".
