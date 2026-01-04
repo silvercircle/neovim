@@ -228,7 +228,7 @@ static Set(ptr_t) invalidated_terminals = SET_INIT;
 
 static void emit_termrequest(void **argv)
 {
-  Terminal *term = argv[0];
+  handle_T buf_handle = (handle_T)(intptr_t)argv[0];
   char *sequence = argv[1];
   size_t sequence_length = (size_t)argv[2];
   StringBuilder *pending_send = argv[3];
@@ -236,14 +236,20 @@ static void emit_termrequest(void **argv)
   int col = (int)(intptr_t)argv[5];
   size_t sb_deleted = (size_t)(intptr_t)argv[6];
 
+  buf_T *buf = handle_get_buffer(buf_handle);
+  if (!buf || buf->terminal == NULL) {  // Terminal already closed.
+    xfree(sequence);
+    return;
+  }
+  Terminal *term = buf->terminal;
+
   if (term->sb_pending > 0) {
     // Don't emit the event while there is pending scrollback because we need
     // the buffer contents to be fully updated. If this is the case, schedule
     // the event onto the pending queue where it will be executed after the
     // terminal is refreshed and the pending scrollback is cleared.
-    multiqueue_put(term->pending.events, emit_termrequest, term, sequence, (void *)sequence_length,
-                   pending_send, (void *)(intptr_t)row, (void *)(intptr_t)col,
-                   (void *)(intptr_t)sb_deleted);
+    multiqueue_put(term->pending.events, emit_termrequest, argv[0], argv[1], argv[2],
+                   argv[3], argv[4], argv[5], argv[6]);
     return;
   }
 
@@ -258,7 +264,6 @@ static void emit_termrequest(void **argv)
   PUT_C(data, "sequence", STRING_OBJ(termrequest));
   PUT_C(data, "cursor", ARRAY_OBJ(cursor));
 
-  buf_T *buf = handle_get_buffer(term->buf_handle);
   apply_autocmds_group(EVENT_TERMREQUEST, NULL, NULL, true, AUGROUP_ALL, buf, NULL,
                        &DICT_OBJ(data));
   xfree(sequence);
@@ -281,7 +286,7 @@ static void schedule_termrequest(Terminal *term)
   kv_init(*term->pending.send);
 
   int line = row_to_linenr(term, term->cursor.row);
-  multiqueue_put(main_loop.events, emit_termrequest, term,
+  multiqueue_put(main_loop.events, emit_termrequest, (void *)(intptr_t)term->buf_handle,
                  xmemdup(term->termrequest_buffer.items, term->termrequest_buffer.size),
                  (void *)(intptr_t)term->termrequest_buffer.size, term->pending.send,
                  (void *)(intptr_t)line, (void *)(intptr_t)term->cursor.col,
@@ -868,6 +873,11 @@ static bool terminal_check_focus(TerminalState *const s)
   if (s->term != curbuf->terminal) {
     // Active terminal buffer changed, flush terminal's cursor state to the UI.
     terminal_focus(s->term, false);
+    if (s->close) {
+      s->term->destroy = true;
+      s->term->opts.close_cb(s->term->opts.data);
+      s->close = false;
+    }
 
     s->term = curbuf->terminal;
     s->term->pending.cursor = true;
@@ -885,6 +895,9 @@ static bool terminal_check_focus(TerminalState *const s)
 static int terminal_check(VimState *state)
 {
   TerminalState *const s = (TerminalState *)state;
+
+  // Shouldn't reach here when pressing a key to close the terminal buffer.
+  assert(!s->close || (s->term->buf_handle == 0 && s->term != curbuf->terminal));
 
   if (stop_insert_mode || !terminal_check_focus(s)) {
     return 0;
@@ -905,7 +918,6 @@ static int terminal_check(VimState *state)
   s->term->refcount--;
   if (s->term->buf_handle == 0) {
     s->close = true;
-    return 0;
   }
 
   // Autocommands above may have changed focus, scrolled, or moved the cursor.
@@ -978,7 +990,6 @@ static int terminal_execute(VimState *state, int key)
     s->term->refcount--;
     if (s->term->buf_handle == 0) {
       s->close = true;
-      return 0;
     }
     break;
 
@@ -1056,6 +1067,7 @@ void terminal_destroy(Terminal **termpp)
     kv_destroy(term->selection);
     kv_destroy(term->termrequest_buffer);
     vterm_free(term->vt);
+    xfree(term->pending.send);
     multiqueue_free(term->pending.events);
     xfree(term);
     *termpp = NULL;  // coverity[dead-store]
