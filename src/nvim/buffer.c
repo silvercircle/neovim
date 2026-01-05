@@ -480,6 +480,14 @@ static bool can_unload_buffer(buf_T *buf)
   return can_unload;
 }
 
+void buf_close_terminal(buf_T *buf)
+{
+  assert(buf->terminal);
+  buf->b_locked++;
+  terminal_close(&buf->terminal, -1);
+  buf->b_locked--;
+}
+
 /// Close the link to a buffer.
 ///
 /// @param win    If not NULL, set b_last_cursor.
@@ -500,7 +508,7 @@ static bool can_unload_buffer(buf_T *buf)
 ///               close all other windows.
 /// @param ignore_abort
 ///               If true, don't abort even when aborting() returns true.
-/// @return  true when we got to the end and b_nwindows was decremented.
+/// @return  true if b_nwindows was decremented directly by this call (e.g: not via autocmds).
 bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool ignore_abort)
 {
   bool unload_buf = (action != 0);
@@ -571,7 +579,7 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
     }
     buf->b_locked--;
     buf->b_locked_split--;
-    if (abort_if_last && one_window(win)) {
+    if (abort_if_last && win != NULL && one_window(win, NULL)) {
       // Autocommands made this the only window.
       emsg(_(e_auabort));
       return false;
@@ -590,7 +598,7 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
       }
       buf->b_locked--;
       buf->b_locked_split--;
-      if (abort_if_last && one_window(win)) {
+      if (abort_if_last && win != NULL && one_window(win, NULL)) {
         // Autocommands made this the only window.
         emsg(_(e_auabort));
         return false;
@@ -625,13 +633,11 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
   // Return when a window is displaying the buffer or when it's not
   // unloaded.
   if (buf->b_nwindows > 0 || !unload_buf) {
-    return false;
+    return true;
   }
 
   if (buf->terminal) {
-    buf->b_locked++;
-    terminal_close(&buf->terminal, -1);
-    buf->b_locked--;
+    buf_close_terminal(buf);
   }
 
   // Always remove the buffer when there is no file name.
@@ -702,7 +708,7 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last, bool i
     }
     // Do not wipe out the buffer if it is used in a window.
     if (buf->b_nwindows > 0) {
-      return false;
+      return true;
     }
     FOR_ALL_TAB_WINDOWS(tp, wp) {
       mark_forget_file(wp, buf->b_fnum);

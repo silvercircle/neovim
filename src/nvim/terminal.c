@@ -581,7 +581,7 @@ void terminal_close(Terminal **termpp, int status)
 
 #ifdef EXITFREE
   if (entered_free_all_mem) {
-    // If called from close_buffer() inside free_all_mem(), the main loop has
+    // If called from buf_close_terminal() inside free_all_mem(), the main loop has
     // already been freed, so it is not safe to call the close callback here.
     terminal_destroy(termpp);
     return;
@@ -591,7 +591,7 @@ void terminal_close(Terminal **termpp, int status)
   bool only_destroy = false;
 
   if (term->closed) {
-    // If called from close_buffer() after the process has already exited, we
+    // If called from buf_close_terminal() after the process has already exited, we
     // only need to call the close callback to clean up the terminal object.
     only_destroy = true;
   } else {
@@ -608,9 +608,9 @@ void terminal_close(Terminal **termpp, int status)
   buf_T *buf = handle_get_buffer(term->buf_handle);
 
   if (status == -1 || exiting) {
-    // If this was called by close_buffer() (status is -1), or if exiting, we
-    // must inform the buffer the terminal no longer exists so that
-    // close_buffer() won't call this again.
+    // If this was called by buf_close_terminal() (status is -1), or if exiting, we
+    // must inform the buffer the terminal no longer exists so that close_buffer()
+    // won't call buf_close_terminal() again.
     // If inside Terminal mode event handling, setting buf_handle to 0 also
     // informs terminal_enter() to call the close callback before returning.
     term->buf_handle = 0;
@@ -871,7 +871,7 @@ static bool terminal_check_focus(TerminalState *const s)
     set_terminal_winopts(s);
   }
   if (s->term != curbuf->terminal) {
-    // Active terminal buffer changed, flush terminal's cursor state to the UI.
+    // Active terminal changed, flush terminal's cursor state to the UI.
     terminal_focus(s->term, false);
     if (s->close) {
       s->term->destroy = true;
@@ -1350,8 +1350,11 @@ static int term_movecursor(VTermPos new_pos, VTermPos old_pos, int visible, void
 }
 
 static void buf_set_term_title(buf_T *buf, const char *title, size_t len)
-  FUNC_ATTR_NONNULL_ALL
 {
+  if (!buf) {
+    return;  // In case of receiving OSC 2 between buffer close and job exit.
+  }
+
   Error err = ERROR_INIT;
   dict_set_var(buf->b_vars,
                STATIC_CSTR_AS_STRING("term_title"),
@@ -1378,7 +1381,7 @@ static int term_settermprop(VTermProp prop, VTermValue *val, void *data)
     break;
 
   case VTERM_PROP_TITLE: {
-    buf_T *buf = handle_get_buffer(term->buf_handle);
+    buf_T *buf = handle_get_buffer(term->buf_handle);  // May be NULL
     VTermStringFragment frag = val->string;
 
     if (frag.initial && frag.final) {
@@ -2106,12 +2109,8 @@ static void invalidate_terminal(Terminal *term, int start_row, int end_row)
 static void refresh_terminal(Terminal *term)
 {
   buf_T *buf = handle_get_buffer(term->buf_handle);
-  bool valid = true;
-  if (!buf || !(valid = buf_valid(buf))) {
+  if (!buf) {
     // Destroyed by `close_buffer`. Do not do anything else.
-    if (!valid) {
-      term->buf_handle = 0;
-    }
     return;
   }
   linenr_T ml_before = buf->b_ml.ml_line_count;
