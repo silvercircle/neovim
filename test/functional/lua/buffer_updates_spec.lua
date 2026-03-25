@@ -8,7 +8,6 @@ local api = n.api
 local fn = n.fn
 local clear = n.clear
 local eq = t.eq
-local fail = t.fail
 local exec_lua = n.exec_lua
 local feed = n.feed
 local expect_events = t.expect_events
@@ -507,7 +506,7 @@ describe('lua: nvim_buf_attach on_bytes', function()
       for _, event in ipairs(events) do
         for _, elem in ipairs(event) do
           if type(elem) == 'number' and elem < 0 then
-            fail(string.format('Received event has negative values'))
+            error('Received event has negative values')
           end
         end
 

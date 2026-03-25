@@ -64,6 +64,31 @@ function vim.deepcopy(orig, noref)
   return deepcopy(orig, not noref and {} or nil)
 end
 
+--- Returns a shallow copy of `orig`.
+---
+--- Non-table values are returned as-is. Table keys and values are copied by
+--- reference, and the original metatable is preserved. Use |vim.deepcopy()|
+--- for a recursive copy.
+---
+--- @nodoc
+--- @generic T
+--- @param orig T
+--- @return T
+function vim._copy(orig)
+  if type(orig) ~= 'table' then
+    return orig
+  end
+
+  --- @cast orig table<any,any>
+
+  local copy = {} --- @type table<any,any>
+  for k, v in pairs(orig) do
+    copy[k] = v
+  end
+
+  return setmetatable(copy, getmetatable(orig))
+end
+
 --- @class vim.gsplit.Opts
 --- @inlinedoc
 ---
@@ -678,6 +703,8 @@ local function deep_equal(left, right, seen)
     return false
   end
 
+  ---@cast left table<any, any>
+  ---@cast right table<any, any>
   seen = seen or {}
   local seen_left = seen[left]
   if seen_left and seen_left[right] ~= nil then
