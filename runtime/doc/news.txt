@@ -394,6 +394,8 @@ TUI
   sequence.
 • The TUI now renders the SGR dim (faint), blink, conceal, and overline
   attributes.
+• The TUI will re-query the terminal's background color when resuming from
+  a suspended state, and Nvim will update 'background' accordingly.
 
 UI
 
