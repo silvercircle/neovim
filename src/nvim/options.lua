@@ -8825,8 +8825,8 @@ local options = {
           %-0{minwid}.{maxwid}{item}
         <
         All fields except {item} are optional.  Use "%%" to show a literal "%"
-        char.  Setting this option to empty (`:set statusline=`) sets its
-        value to the default.
+        char.  Setting to empty (`:set statusline=`) sets the global value to
+        the default.
 
         						*stl-%!*
         When the option starts with "%!" then it is used as an expression,
