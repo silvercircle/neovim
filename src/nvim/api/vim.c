@@ -889,6 +889,7 @@ Union(Integer, String) nvim_echo(ArrayOf(Tuple(String, *HLGroupID)) chunks, Bool
   const int save_lines_left = lines_left;
   const bool save_msg_didany = msg_didany;
   // Similar truncation method to showmode().
+  // TODO(justinmk): drop _truncate feature after ui2 graduates?
   if (opts->_truncate) {
     no_wait_return++;
     lines_left = 0;
