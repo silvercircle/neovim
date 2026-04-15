@@ -4287,31 +4287,19 @@ by |vim.Pos| objects.
     as format conversions.
 
     Fields: ~
-      • {row}         (`integer`) 0-based byte index.
-      • {col}         (`integer`) 0-based byte index.
-      • {buf}         (`integer`) buffer handle.
-      • {to_lsp}      (`fun(pos: vim.Pos, position_encoding: lsp.PositionEncodingKind)`)
-                      See |Pos:to_lsp()|.
-      • {lsp}         (`fun(buf: integer, pos: lsp.Position, position_encoding: lsp.PositionEncodingKind)`)
-                      See |Pos:lsp()|.
-      • {to_cursor}   (`fun(pos: vim.Pos): integer, integer`) See
-                      |Pos:to_cursor()|.
-      • {cursor}      (`fun(buf: integer, pos: [integer, integer])`) See
-                      |Pos:cursor()|.
-      • {to_extmark}  (`fun(pos: vim.Pos): integer, integer`) See
-                      |Pos:to_extmark()|.
-      • {extmark}     (`fun(buf: integer, row: integer, col: integer)`) See
-                      |Pos:extmark()|.
+      • {row}  (`integer`) 0-based byte index.
+      • {col}  (`integer`) 0-based byte index.
+      • {buf}  (`integer`) buffer handle.
 
 
-Pos:cursor({buf}, {pos})                                        *Pos:cursor()*
+cursor({buf}, {pos})                                        *vim.pos.cursor()*
     Creates a new |vim.Pos| from cursor position (see |api-indexing|).
 
     Parameters: ~
       • {buf}  (`integer`)
       • {pos}  (`[integer, integer]`)
 
-Pos:extmark({buf}, {row}, {col})                               *Pos:extmark()*
+extmark({buf}, {row}, {col})                               *vim.pos.extmark()*
     Creates a new |vim.Pos| from extmark position (see |api-indexing|).
 
     Parameters: ~
@@ -4319,7 +4307,7 @@ Pos:extmark({buf}, {row}, {col})                               *Pos:extmark()*
       • {row}  (`integer`)
       • {col}  (`integer`)
 
-Pos:lsp({buf}, {pos}, {position_encoding})                         *Pos:lsp()*
+lsp({buf}, {pos}, {position_encoding})                         *vim.pos.lsp()*
     Creates a new |vim.Pos| from `lsp.Position`.
 
     Example: >lua
@@ -4337,7 +4325,7 @@ Pos:lsp({buf}, {pos}, {position_encoding})                         *Pos:lsp()*
       • {pos}                (`lsp.Position`)
       • {position_encoding}  (`lsp.PositionEncodingKind`)
 
-Pos:to_cursor({pos})                                         *Pos:to_cursor()*
+to_cursor({pos})                                         *vim.pos.to_cursor()*
     Converts |vim.Pos| to cursor position (see |api-indexing|).
 
     Parameters: ~
@@ -4347,7 +4335,7 @@ Pos:to_cursor({pos})                                         *Pos:to_cursor()*
         (`integer`)
         (`integer`)
 
-Pos:to_extmark({pos})                                       *Pos:to_extmark()*
+to_extmark({pos})                                       *vim.pos.to_extmark()*
     Converts |vim.Pos| to extmark position (see |api-indexing|).
 
     Parameters: ~
@@ -4357,7 +4345,7 @@ Pos:to_extmark({pos})                                       *Pos:to_extmark()*
         (`integer`)
         (`integer`)
 
-Pos:to_lsp({pos}, {position_encoding})                          *Pos:to_lsp()*
+to_lsp({pos}, {position_encoding})                          *vim.pos.to_lsp()*
     Converts |vim.Pos| to `lsp.Position`.
 
     Example: >lua
@@ -4413,30 +4401,14 @@ Provides operations to compare, calculate, and convert ranges represented by
 <
 
     Fields: ~
-      • {start_row}   (`integer`) 0-based byte index.
-      • {start_col}   (`integer`) 0-based byte index.
-      • {end_row}     (`integer`) 0-based byte index.
-      • {end_col}     (`integer`) 0-based byte index.
-      • {buf}         (`integer`) Optional buffer handle.
-      • {is_empty}    (`fun(self: vim.Range): boolean`) See
-                      |Range:is_empty()|.
-      • {has}         (`fun(outer: vim.Range, inner: vim.Range|vim.Pos): boolean`)
-                      See |Range:has()|.
-      • {intersect}   (`fun(r1: vim.Range, r2: vim.Range): vim.Range?`) See
-                      |Range:intersect()|.
-      • {to_lsp}      (`fun(range: vim.Range, position_encoding: lsp.PositionEncodingKind): lsp.Range`)
-                      See |Range:to_lsp()|.
-      • {lsp}         (`fun(buf: integer, range: lsp.Range, position_encoding: lsp.PositionEncodingKind)`)
-                      See |Range:lsp()|.
-      • {to_extmark}  (`fun(range: vim.Range)`) See |Range:to_extmark()|.
-      • {extmark}     (`fun(buf: integer, start_row: integer, start_col: integer, end_row: integer, end_col: integer)`)
-                      See |Range:extmark()|.
-      • {to_cursor}   (`fun(range: vim.Range)`) See |Range:to_cursor()|.
-      • {cursor}      (`fun(buf: integer, start_pos: [integer, integer], end_pos: [integer, integer])`)
-                      See |Range:cursor()|.
+      • {start_row}  (`integer`) 0-based byte index.
+      • {start_col}  (`integer`) 0-based byte index.
+      • {end_row}    (`integer`) 0-based byte index.
+      • {end_col}    (`integer`) 0-based byte index.
+      • {buf}        (`integer`) Optional buffer handle.
 
 
-Range:cursor({buf}, {start_pos}, {end_pos})                   *Range:cursor()*
+cursor({buf}, {start_pos}, {end_pos})                     *vim.range.cursor()*
     Creates a new |vim.Range| from mark-like range (see |api-indexing|).
 
     Example: >lua
@@ -4453,8 +4425,8 @@ Range:cursor({buf}, {start_pos}, {end_pos})                   *Range:cursor()*
       • {start_pos}  (`[integer, integer]`)
       • {end_pos}    (`[integer, integer]`)
 
-                                                             *Range:extmark()*
-Range:extmark({buf}, {start_row}, {start_col}, {end_row}, {end_col})
+                                                         *vim.range.extmark()*
+extmark({buf}, {start_row}, {start_col}, {end_row}, {end_col})
     Creates a new |vim.Range| from extmark range (see |api-indexing|).
 
     Example: >lua
@@ -4470,7 +4442,7 @@ Range:extmark({buf}, {start_row}, {start_col}, {end_row}, {end_col})
       • {end_row}    (`integer`)
       • {end_col}    (`integer`)
 
-Range:has({outer}, {inner})                                      *Range:has()*
+has({outer}, {inner})                                        *vim.range.has()*
     Checks whether {outer} range contains {inner} range or position.
 
     Parameters: ~
@@ -4481,7 +4453,7 @@ Range:has({outer}, {inner})                                      *Range:has()*
         (`boolean`) `true` if {outer} range fully contains {inner} range or
         position.
 
-Range:intersect({r1}, {r2})                                *Range:intersect()*
+intersect({r1}, {r2})                                  *vim.range.intersect()*
     Computes the common range shared by the given ranges.
 
     Parameters: ~
@@ -4492,13 +4464,16 @@ Range:intersect({r1}, {r2})                                *Range:intersect()*
         (`vim.Range?`) range that is present inside both `r1` and `r2`. `nil`
         if such range does not exist. See |vim.Range|.
 
-Range:is_empty()                                            *Range:is_empty()*
+is_empty({range})                                       *vim.range.is_empty()*
     Checks whether the given range is empty; i.e., start >= end.
 
-    Return: ~
-        (`boolean`) `true` if the given range is empty
+    Parameters: ~
+      • {range}  (`vim.Range`) See |vim.Range|.
 
-Range:lsp({buf}, {range}, {position_encoding})                   *Range:lsp()*
+    Return: ~
+        (`boolean`) `true` if the given range is empty.
+
+lsp({buf}, {range}, {position_encoding})                     *vim.range.lsp()*
     Creates a new |vim.Range| from `lsp.Range`.
 
     Example: >lua
@@ -4516,7 +4491,7 @@ Range:lsp({buf}, {range}, {position_encoding})                   *Range:lsp()*
       • {range}              (`lsp.Range`)
       • {position_encoding}  (`lsp.PositionEncodingKind`)
 
-Range:to_cursor({range})                                   *Range:to_cursor()*
+to_cursor({range})                                     *vim.range.to_cursor()*
     Converts |vim.Range| to mark-like range (see |api-indexing|).
 
     Example: >lua
@@ -4530,7 +4505,7 @@ Range:to_cursor({range})                                   *Range:to_cursor()*
     Parameters: ~
       • {range}  (`vim.Range`) See |vim.Range|.
 
-Range:to_extmark({range})                                 *Range:to_extmark()*
+to_extmark({range})                                   *vim.range.to_extmark()*
     Converts |vim.Range| to extmark range (see |api-indexing|).
 
     Example: >lua
@@ -4544,7 +4519,7 @@ Range:to_extmark({range})                                 *Range:to_extmark()*
     Parameters: ~
       • {range}  (`vim.Range`) See |vim.Range|.
 
-Range:to_lsp({range}, {position_encoding})                    *Range:to_lsp()*
+to_lsp({range}, {position_encoding})                      *vim.range.to_lsp()*
     Converts |vim.Range| to `lsp.Range`.
 
     Example: >lua
