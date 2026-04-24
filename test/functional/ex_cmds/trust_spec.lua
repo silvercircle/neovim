@@ -71,8 +71,7 @@ describe(':trust', function()
 
     command('edit ' .. empty_file)
     matches('^Allowed in trust database%: ".*' .. empty_file .. '"$', exec_capture('trust'))
-    local trust = t.read_file(fn.stdpath('state') .. pathsep .. 'trust')
-    eq(string.format('%s %s', hash, cwd .. pathsep .. empty_file), vim.trim(trust))
+    assert_trust_entry(('%s %s'):format(hash, osjoin(cwd, empty_file)))
   end)
 
   it('deny then trust then remove a file using current buffer', function()
