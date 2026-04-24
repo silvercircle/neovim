@@ -334,12 +334,11 @@ describe('vim.secure', function()
     it('trust an empty file using bufnr', function()
       local cwd = fn.getcwd()
       local hash = fn.sha256(assert(read_file(empty_file)))
-      local full_path = cwd .. pathsep .. empty_file
+      local full_path = osjoin(cwd, empty_file)
 
       command('edit ' .. empty_file)
       eq({ true, full_path }, exec_lua([[return {vim.secure.trust({action='allow', bufnr=0})}]]))
-      local trust = assert(read_file(stdpath('state') .. pathsep .. 'trust'))
-      eq(string.format('%s %s', hash, full_path), vim.trim(trust))
+      assert_trust_entry(('%s %s'):format(hash, full_path))
     end)
 
     it('deny then trust then remove a file using bufnr', function()
