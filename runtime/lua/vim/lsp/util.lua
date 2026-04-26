@@ -1232,11 +1232,11 @@ end
 ---@param contents string[] of lines to show in window
 ---@param opts? table with optional fields
 ---  - height    of floating window
+---  - max_height maximal height of floating window
+---  - max_width  maximal width of floating window
+---  - separator insert separator after code block
 ---  - width     of floating window
 ---  - wrap_at   character to wrap at for computing height
----  - max_width  maximal width of floating window
----  - max_height maximal height of floating window
----  - separator insert separator after code block
 ---@return table stripped content
 function M.stylize_markdown(bufnr, contents, opts)
   vim.deprecate('vim.lsp.util.stylize_markdown', nil, '0.14')

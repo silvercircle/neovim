@@ -610,6 +610,8 @@ local function inline_type(obj, classes)
     end
   end
 
+  util.sort_by_key(cls.fields, 'name')
+
   local desc_append = {}
   for _, f in ipairs(cls.fields) do
     if not f.access then
@@ -714,6 +716,8 @@ local function render_class(class, classes, hidden_fields, cfg)
       return not class_hidden[field.name]
     end, fields)
   end
+
+  util.sort_by_key(fields, 'name')
 
   local fields_txt = render_fields_or_params(fields, nil, classes, cfg)
   if not fields_txt:match('^%s*$') then
@@ -1145,6 +1149,7 @@ local function gen_target(cfg)
 
     if not f:find('ui_events%.in%.h$') then -- TODO(justinmk): also lint UI events.
       lint.lint_names(f, funs, nil, classes)
+      lint.lint_quasi_keysets(f, funs)
     end
 
     local mod_cls_nm = find_module_class(classes, 'M')
