@@ -206,13 +206,24 @@ describe('multicursor', function()
       eq({ 'one wo' }, get_lines())
     end)
 
-    it('Q then non-moving edit applies once (cursor merges into primary)', function()
-      fn.setline(1, { 'ab' })
+    it('Q then edit applies once; primary-overlapping cursor stays synced', function()
+      fn.setline(1, { 'ab', 'cd' })
       feed('Q')
       eq(1, ncursors())
-      feed('x')
-      eq({ 'b' }, get_lines())
-      eq(0, ncursors()) -- merged at the cascade; multicursor mode ended
+      feed('x') -- The primary's own edit covers the cursor under it, applied only once.
+      eq({ 'b', 'cd' }, get_lines())
+      eq({ { 0, 0 } }, anchors())
+      feed('jx') -- Move with follow=OFF, the cursor is no longer "primary-overlapping".
+      eq({ '', 'd' }, get_lines())
+
+      -- Insert-session ESC moves the primary; the primary-overlapping cursor stays synced.
+      for _, keys in ipairs({ 'i<Esc>', 'a<Esc>', 'aX<Esc>', 'A<Esc>', 'cwX<Esc>', 'oX<Esc>' }) do
+        clear_cursors()
+        cursors({ 'abcd', 'efgh' }, 'lQjQ')
+        feed(keys)
+        local cur = api.nvim_win_get_cursor(0)
+        eq({ cur[1] - 1, cur[2] }, anchors()[2], keys)
+      end
     end)
 
     it('Q on an existing cursor removes it (toggle)', function()
@@ -314,8 +325,8 @@ describe('multicursor', function()
       eq({ 1, 8 }, api.nvim_win_get_cursor(0))
       feed('cwXXX<Esc>')
       eq({ 'XXX bar XXX', 'baz XXX qux', 'foobar XXX' }, get_lines())
-      -- The cursor under the primary merged at the cascade (no double-apply).
-      eq(3, ncursors())
+      -- Primary-overlapping cursor is not replayed (no double-apply).
+      eq(4, ncursors())
       -- A "/" search likewise, also with several matches per line.
       clear_cursors()
       api.nvim_buf_set_lines(0, 0, -1, true, { 'ab ab ab', 'xx ab' })
@@ -1170,6 +1181,36 @@ describe('multicursor', function()
   end)
 
   describe('insert-mode', function()
+    it('"cgn" cascades live; failed cursor is removed #41960', function()
+      -- "gn" searches per-cursor. Insert-entry cascades, and typed text previews live, before ESC.
+      cursors({ 'a x foo', 'b foo', 'c y z foo' }, 'QjQj0')
+      feed('/foo<CR>')
+      feed('cgn')
+      eq({ 'a x ', 'b ', 'c y z ' }, get_lines())
+      eq({ { 0, 4 }, { 1, 2 } }, anchors()) -- Each cursor moved to its match.
+      feed('X')
+      eq({ 'a x X', 'b X', 'c y z X' }, get_lines())
+      feed('<Esc>')
+      eq({ 'a x X', 'b X', 'c y z X' }, get_lines())
+      feed('u') -- One undo step.
+      eq({ 'a x foo', 'b foo', 'c y z foo' }, get_lines())
+
+      -- Cursor is removed when insert-entry fails at a cursor ("ct;" where there is no ";").
+      clear_cursors()
+      cursors({ 'a;b', 'cd', 'e;f' }, 'QjQj0')
+      eq(2, ncursors())
+      feed('ct;X<Esc>')
+      eq({ 'X;b', 'cd', 'X;f' }, get_lines())
+      eq(1, ncursors())
+      -- Same for "cgn" at a cursor with no match left (the primary's replay consumed it).
+      clear_cursors()
+      cursors({ 'a foo', 'b', 'c' }, 'jQjQgg0')
+      feed('/foo<CR>')
+      feed('cgnX<Esc>')
+      eq({ 'a X', 'b', 'c' }, get_lines())
+      eq(0, ncursors())
+    end)
+
     it('CTRL-U cascades before <Esc> (deletion crossing the session anchor)', function()
       -- Deleting typed text cascades live (the region shrinks). But CTRL-U here eats the "o"
       -- autoindent, which precedes the tracked region, invisible to the preview diff.
@@ -1799,16 +1840,27 @@ describe('multicursor', function()
   end)
 
   describe('visual-mode cascade', function()
-    it('failed command mid-replay does not leak Visual mode into the next replay', function()
+    it('failed motion mid-replay does not eat the keys after it', function()
       fn.setline(1, { 'alpha bravo', 'golf hotel', 'mike november' })
       feed('ggVjjQ') -- cursor on each line; enables "q=" follow-mode
       feed('gg0')
-      -- The abandoned selection replays "vlo h <Esc>" at each cursor ("q=" follow). The "h" fails
-      -- (col 0 after "o" swapped to the selection start), which flushes the rest of the replay,
-      -- eating the terminating <Esc>. Visual mode must not leak into the next cursor's replay.
+      -- The abandoned selection replays "vloh<Esc>" at each cursor ("q=" follow). The "h" fails
+      -- (col 0 after "o" swap); Visual mode must not leak into next cursor replay.
       feed('vloh<Esc>')
       eq({ 'alpha bravo', 'golf hotel', 'mike november' }, get_lines())
       eq('n', api.nvim_get_mode().mode)
+
+      -- Per-cursor behavior: "t;" fails if cursor-line has no ";". The op still applies to the
+      -- existing Visual selection.
+      clear_cursors()
+      cursors({ 'a;b', 'cd', 'e;f' }, 'jQjQgg0')
+      feed('vt;d')
+      eq({ ';b', 'd', ';f' }, get_lines())
+      eq(2, ncursors()) -- The cursor where "t;" failed is kept.
+      clear_cursors()
+      cursors({ 'a;b', 'cd', 'e;f' }, 'jQjQgg0')
+      feed('vt;cX<Esc>')
+      eq({ 'X;b', 'Xd', 'X;f' }, get_lines())
     end)
 
     it('per-cursor selection', function()
@@ -2042,12 +2094,15 @@ describe('multicursor', function()
       eq({ 'bacd', 'fegh', 'jikl' }, get_lines())
     end)
 
-    it('cursor overlapping the primary is deduped before an edit #42025', function()
+    it('primary-overlapping cursor is not replayed; stays synced #42025', function()
       -- The command may move the primary before the cascade ("yiwp")!
       command('nnoremap gm yiwp') -- "Multiply" the word at cursor.
-      cursors({ 'aa', 'bb' }, 'QjQ') -- Cursor overlapping the primary.
+      cursors({ 'aa', 'bb' }, 'QjQ') -- Primary-overlapping cursor.
       feed('gm')
       eq({ 'aaaa', 'bbbb' }, get_lines())
+      -- Primary-overlapping cursor settles on the primary's new position (the paste moved it).
+      local cur = api.nvim_win_get_cursor(0)
+      eq({ { 0, 2 }, { cur[1] - 1, cur[2] } }, anchors())
 
       -- Also when the edit displaces the overlapping cursor's (right-gravity) mark.
       for _, place in ipairs({ 'QjQ', 'vipQ' }) do
@@ -2060,7 +2115,8 @@ describe('multicursor', function()
           cursors({ 'aa', 'bb' }, place)
           feed(case[1])
           eq(case[2], get_lines(), place .. ' ' .. case[1])
-          eq(1, ncursors(), place .. ' ' .. case[1])
+          local cur = api.nvim_win_get_cursor(0)
+          eq({ cur[1] - 1, cur[2] }, anchors()[2], place .. ' ' .. case[1]) -- Re-synced.
         end
       end
 
@@ -2070,6 +2126,17 @@ describe('multicursor', function()
       cursors({ 'abcd', 'efgh', 'ijkl' }, 'QjQjQ')
       feed('0vgl')
       eq({ 'bacd', 'fegh', 'jikl' }, get_lines())
+      -- Also when Visual selection moves the primary first.
+      for _, keys in ipairs({ 'va)d', 'va)cX<Esc>', 'ca)X<Esc>' }) do
+        feed('<Esc>')
+        clear_cursors()
+        cursors({ 'aa (bb) (cc)', 'aa (bb) (cc)' }, 'vipQ')
+        feed(keys)
+        local x = keys:find('X') and 'X' or ''
+        eq({ ('aa %s (cc)'):format(x), ('aa %s (cc)'):format(x) }, get_lines(), keys)
+        local cur = api.nvim_win_get_cursor(0)
+        eq({ cur[1] - 1, cur[2] }, anchors()[2], keys) -- Primary-overlapping cursor stays synced.
+      end
       -- Motion does not cascade, so it must not dedupe the cursor under the primary.
       clear_cursors()
       cursors({ 'abc', 'def' }, 'Q')
@@ -2437,6 +2504,19 @@ describe('multicursor', function()
       feed('gg')
       feed('L')
       eq({ { 0, 1 } }, anchors())
+
+      -- Jump from a mapping (no LHS-replay fallback). #41995
+      command('nnoremap <Down> ]C')
+      clear_cursors()
+      cursors({ 'a', 'b', 'c', 'd' }, 'QjQjQj')
+      feed('1q=')
+      eq({ { 0, 0 }, { 1, 0 }, { 2, 0 } }, anchors())
+      eq(4, fn.line('.'))
+      for _, line in ipairs({ 1, 2, 3, 1 }) do
+        feed('<Down>')
+        eq(line, fn.line('.')) -- The primary jumps to the next cursor (wraps)...
+        eq({ { 0, 0 }, { 1, 0 }, { 2, 0 } }, anchors()) -- ...the cursors stay put.
+      end
     end)
 
     it('"*" follows per-cursor (its own word); keeps the primary search pattern', function()

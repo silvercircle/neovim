@@ -34,7 +34,8 @@ typedef enum CmdAtomType {
 typedef struct {
   bufref_T buf;       ///< Buffer.
   const win_T *win;   ///< Window.
-  pos_T pos;          ///< Cursor position. Stored here bc the window might be closed.
+  pos_T pos;          ///< Primary cursor position at the start (`win.w_cursor` moves after).
+  uint32_t mcursor;   ///< Mcursor overlapping primary at `pos` (mark id, 0: none). Not replayed.
   varnumber_T tick;   ///< b:changedtick.
   int maptick;        ///< Advances on typed input (globals.h:maptick).
 } CmdOrigin;
@@ -43,8 +44,8 @@ typedef struct {
 typedef enum {
   kVInsNone,    ///< Not entered from Visual mode.
   kVInsKeys,    ///< Redo opens with the selection's captured keys: replayable.
-  kVInsMotion,  ///< Ex/Lua motion selected the region ("c" + Lua textobj): replayable.
-  kVInsOther,   ///< Redo without captured keys: forced or self-selecting motion (gn, gv), or "1v"
+  kVInsMotion,  ///< Motion selected the region: Ex/Lua omap ("c" + Lua textobj), "gn". Replayable.
+  kVInsOther,   ///< Redo without captured keys: forced motion, "gv", or "1v"
                 ///< fixed-size fallback.
 } VisualIns;
 
