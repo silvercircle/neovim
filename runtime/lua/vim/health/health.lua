@@ -188,7 +188,7 @@ end
 
 -- Note: this is part of check_performance().
 local function check_watchers()
-  local a = vim._watch.active
+  local a = vim._watch.active()
   local total = a.watch + a.watchdirs + a.inotify
   health.info(
     ('Filewatchers (vim._watch): %d (watch=%d, watchdirs=%d, inotify=%d)'):format(
@@ -641,16 +641,18 @@ local function check_external_tools()
         'http_proxy',
         'all_proxy',
         'no_proxy',
-      }) do
-        ---@type string?
-        local val = vim.env[var] or vim.env[var:upper()]
+      } --[[@as string[] ]]) do
+        local val = vim.env[var]
+        if not val then
+          var = var:upper()
+          val = vim.env[var]
+        end
         if val then
           if not added_env_header then
             table.insert(lines, 'curl-related environment variables:')
             added_env_header = true
           end
-          local shown_var = vim.env[var] and var or var:upper()
-          table.insert(lines, string.format('  %s=%s', shown_var, val))
+          table.insert(lines, string.format('  %s=%s', var, val))
         end
       end
 

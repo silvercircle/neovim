@@ -174,17 +174,24 @@ describe('multicursor', function()
 
     it('gQ restores the cleared cursors (like gv)', function()
       cursors({ 'aaa', 'bbb', 'ccc', 'ddd' }, 'QjQ')
+      eq({ { 0, 0 }, { 1, 0 } }, anchors())
+      eq({ 2, 0 }, api.nvim_win_get_cursor(0))
       clear_cursors()
       eq(0, ncursors())
+      feed('G$') -- Move the primary away.
       feed('gQ')
-      eq(2, ncursors())
-      feed('Gx') -- the restored cursors cascade
+      eq({ { 0, 0 }, { 1, 0 } }, anchors())
+      eq({ 2, 0 }, api.nvim_win_get_cursor(0)) -- Primary cursor position is restored too.
+      feed('Gx') -- The restored cursors cascade.
       eq({ 'aa', 'bb', 'ccc', 'dd' }, get_lines())
-      -- The snapshot is extmark-tracked: edits in between shift it.
+      -- The snapshot extmarks are shifted by intervening edits.
       clear_cursors()
-      feed('ggO<Esc>') -- new line on top shifts the snapshot down
+      feed('ggO<Esc>') -- New line on top shifts the snapshot down.
       feed('gQ')
       eq({ { 1, 0 }, { 2, 0 } }, anchors())
+      -- No-op if multicursor is already active.
+      feed('gQ')
+      eq('gQ: multicursor session is active', n.exec_capture('1messages'))
     end)
 
     it(':g//normal! Q places a cursor at each match', function()
@@ -761,6 +768,24 @@ describe('multicursor', function()
       feed('yy')
       feed('p')
       eq({ 'aaa', 'aaa', 'bbb', 'bbb' }, get_lines())
+    end)
+
+    it('insert-mode <C-R>x #41933', function()
+      for _, case in ipairs({
+        { '0', 'yiw', { 'aaa x-aaa', 'ccc y-ccc' } },
+        { 'a', '"ayiw', { 'aaa x-aaa', 'ccc y-ccc' } },
+        { '"', 'yiw', { 'aaa x-aaa', 'ccc y-ccc' } },
+        { '-', 'diw', { ' x-aaa', ' y-ccc' } },
+      }) do
+        local reg, fill, want = case[1], case[2], case[3]
+        clear_cursors()
+        cursors({ 'aaa x', 'ccc y' }, 'Qj0')
+        feed(fill)
+        feed(('A-<C-R>%s'):format(reg))
+        eq(want, get_lines(), reg) -- Live, before <Esc>.
+        feed('Z<Esc>')
+        eq({ want[1] .. 'Z', want[2] .. 'Z' }, get_lines(), reg)
+      end
     end)
 
     it('empty at cursor init restores as empty', function()
@@ -2119,6 +2144,25 @@ describe('multicursor', function()
           eq({ cur[1] - 1, cur[2] }, anchors()[2], place .. ' ' .. case[1]) -- Re-synced.
         end
       end
+
+      -- Also for LHS-replayed mapping.
+      n.exec_lua(function()
+        -- "rx" via API, which also samples the cursors when replayed at the other cursor.
+        _G.peek = function()
+          local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+          vim.api.nvim_buf_set_text(0, row - 1, col, row - 1, col + 1, { 'x' })
+          if row == 1 then
+            local ns = vim.api.nvim_create_namespace('nvim.multicursor')
+            _G.seen = vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {})[2]
+          end
+        end
+      end)
+      command('nnoremap gr <Cmd>lua _G.peek()<CR>')
+      clear_cursors()
+      cursors({ 'aa', 'bb' }, 'QjQ')
+      feed('gr')
+      eq({ 'xa', 'xb' }, get_lines())
+      eq({ 1, 0 }, n.exec_lua('return { _G.seen[2], _G.seen[3] }'))
 
       -- Same for a Visual span: the primary sits at selection-end.
       command([[xnoremap gl <Cmd>normal! xp`[1v<CR>]])
@@ -3619,6 +3663,51 @@ describe('multicursor', function()
       feed('q=') -- Follow mode: "=" prefix.
       feed('l') -- Tickle showcmd redraw.
       screen:expect({ any = '=2×' })
+
+      -- ui2 redraws on 'showcmd', which should only update AFTER cascade, not during. #42081 #41659
+      n.exec_lua(function()
+        _G.seen = {}
+        local ns = vim.api.nvim_create_namespace('nvim.multicursor.cursor')
+        vim.ui_attach(vim.api.nvim_create_namespace('test'), { ext_messages = true }, function(ev)
+          if ev == 'msg_showcmd' then
+            -- Buffer text, cursor column, and selection-end columns.
+            local ends = vim.tbl_map(function(m)
+              return m[3]
+            end, vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, {}))
+            _G.seen[#_G.seen + 1] = ('%s %d %s'):format(
+              table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, true), ','),
+              vim.fn.col('.') - 1,
+              table.concat(ends, ',')
+            )
+          end
+        end)
+      end)
+      clear_cursors()
+      cursors({ 'aaa', 'bbb', 'ccc' }, 'QjQjQ')
+      screen:expect({ any = '3×' }) -- Input processed, before resetting `seen`.
+      n.exec_lua('_G.seen = {}')
+      feed('rx')
+      screen:expect([[
+        {17:x}aa                           |
+        {17:x}bb                           |
+        {17:^x}cc                           |
+        {1:~                             }|
+                            3×        |
+      ]])
+      eq({ 'aaa,bbb,ccc 0 ', 'xaa,xbb,xcc 0 ' }, n.exec_lua('return _G.seen'))
+      n.exec_lua('_G.seen = {}')
+      feed('vl')
+      screen:expect([[
+        {17:xa}a                           |
+        {17:xb}b                           |
+        {17:x^c}c                           |
+        {1:~                             }|
+        {5:-- VISUAL --}        3× 2      |
+      ]])
+      eq(
+        { 'xaa,xbb,xcc 0 0,0,0', 'xaa,xbb,xcc 1 1,1,1', 'xaa,xbb,xcc 1 1,1,1' },
+        n.exec_lua('return _G.seen')
+      )
     end)
   end)
 
