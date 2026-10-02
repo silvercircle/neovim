@@ -275,10 +275,13 @@ DIAGNOSTICS
 EDITOR
 
 • Multiple cursors (|multicursor|): edit in many places at once.
-  • Toggle cursors with |Q|, |<C-LeftMouse>|, or |nvim_mcursor()|.
+  • Toggle cursors with |Q|, |<C-LeftMouse>|, or via API (the
+    "nvim.multicursor" extmarks namespace).
   • Toggle "follow mode" with |q=|.
   • Clear cursors with |CTRL-L|, restore them with |gQ|.
-  • [count]Q places a cursor at every search match.
+  • |zq| places a cursor at all targets of a motion. E.g. "zqgn" places at
+    every match (and "gv" selects the matches), "Vzqw" places at every
+    Visual-selected word.
 • |:bcd| sets a buffer-local directory. |getcwd()| and |haslocaldir()| take
   `bufnr` as a third parameter.
 • |:lcd!| |:tcd!| |:bcd!| unsets the directory of that scope.
@@ -444,6 +447,7 @@ OPTIONS
   The `%=` item is supported within item groups to separate alignment sections
   within the containing group until its `minwid` is reached. The truncation
   of an item group to its `maxwid` can be controlled with the `%<` item.
+  The new %#(...%#) item denotes a highlight scope.
   The same applies to 'rulerformat', 'statuscolumn', 'tabline', 'winbar',
   'titlestring', and 'iconstring'.
 • 'winpinned' prevents window from closing unless specifically targeted.
@@ -489,6 +493,9 @@ TERMINAL
 
 TREESITTER
 
+• |vim.treesitter.get_captures()| returns highlight captures at a given position,
+  on a whole line, or overlapping a range. It replaces
+  |vim.treesitter.get_captures_at_pos()|.
 • |v_]N| |v_[N| expand selection to sibling treesitter node.
 • |treesitter-highlight-conceal| can be removed by adding a `@noconceal`
   capture.
@@ -579,6 +586,10 @@ These existing features changed their behavior.
   half-width Katakana with voicing marks ｶﾞ. The TUI renders these in
   a safe way which also supports terminals which consider these to be
   single-width.
+• in script mode |-l|, |print()| now behaves more similar to standalone
+  lua. Printing is done to stdout, and empty lines are not stripped.
+  No translation of special characters is done, so escape sequences
+  can be used when printing to a terminal.
 
 ==============================================================================
 REMOVED FEATURES                                                 *news-removed*

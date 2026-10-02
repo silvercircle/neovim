@@ -207,7 +207,7 @@ CmdSpec atom_cmd_spec(const cmdarg_T *cap)
     .count = cap->count0,
     .cmd = cap->cmdchar,
     .cmd2 = operand ? NUL : cap->nchar,
-    .cmdarg = operand ? cap->nchar : NUL,
+    .cmdarg = operand ? cap->nchar : cap->extra_char,  // "g`a" => 'a'.
   };
 }
 
@@ -216,7 +216,7 @@ static CmdOrigin atom_origin(void)
 {
   CmdOrigin origin = { .win = curwin, .pos = curwin->w_cursor,
                        .tick = buf_get_changedtick(curbuf), .maptick = maptick,
-                       .mcursor = mc_mark_at(curbuf, curwin->w_cursor) };
+                       .mcursor = mc_mark_at(curbuf, curwin->w_cursor, 0) };
   set_bufref(&origin.buf, curbuf);
   return origin;
 }
@@ -546,8 +546,10 @@ static void atom_stage_flush(CmdFrame *frame)
   if (frame->staged.keys == NULL) {
     return;
   }
-  // Staged cmds are edits: cascade. Except if no keys (void Visual), or already-cascaded as spans.
-  bool cascade = *frame->staged.keys != NUL && !frame->staged.cascaded;
+  // Staged cmds are edits: cascade. Except if no keys (void Visual), already-cascaded as spans, or
+  // a global op ("zq").
+  bool cascade = *frame->staged.keys != NUL && !frame->staged.cascaded
+                 && global_ops == frame->global_ops;
   atom_push(cascade, &frame->staged);
   frame->staged = (CmdAtom){ 0 };
 }
@@ -706,10 +708,10 @@ static bool atom_buf_has_consumers(void)
   return mc_buf_has_cursors(curbuf) || has_event(EVENT_CMDATOM);
 }
 
-/// Classifies key/command `cmd` (`arg` is its argument char, for two-char commands like "g;").
+/// Classifies key/command `cmd`. arg/arg2 are its argument chars, for commands like g; or g`a.
 ///
 /// @return  kKeyXx flags, or 0 for an ordinary key.
-unsigned atom_key_class(int cmd, int arg)
+unsigned atom_key_class(int cmd, int arg, int arg2)
 {
   switch (cmd) {
   case K_EVENT:
@@ -736,6 +738,9 @@ unsigned atom_key_class(int cmd, int arg)
     return kKeyInsFlush;
   // Multiplexed: one nv_cmds entry => many commands. Classified by char 2, not NV_MOTION/….
   case 'g':
+    if (arg == '\'' || arg == '`') {
+      return atom_key_class(arg, arg2, NUL);  // "g'x", "g`x": like "'x", "`x".
+    }
     if (strchr(";,go", arg) != NULL) {
       return kKeyJump;
     }
@@ -748,6 +753,10 @@ unsigned atom_key_class(int cmd, int arg)
     return strchr("[](){}mMcsz#*/", arg) != NULL ? kKeyMotion : 0;
   case 'z':
     return (arg == 'j' || arg == 'k') ? kKeyMotion : 0;
+  case '\'':
+  case '`':
+    // kCtxVisual|kCtxMarks and '( '{ etc. are cursor-relative; others are absolute.
+    return arg != NUL && strchr("<>[].^(){}", arg) != NULL ? kKeyMotion : kKeyJump;
   case K_DOWN:
   case K_END:
   case K_HOME:
@@ -844,7 +853,7 @@ void atom_typed_add(const uint8_t *chars, size_t len)
     return;
   }
   if (len == 3 && chars[0] == K_SPECIAL
-      && (atom_key_class(TERMCAP2KEY(chars[1], chars[2]), NUL) & kKeySynthetic)) {
+      && (atom_key_class(TERMCAP2KEY(chars[1], chars[2]), NUL, NUL) & kKeySynthetic)) {
     return;  // Not user input: K_IGNORE from a mapping resolved during peek/K_EVENT/…
   }
   for (size_t i = 0; i < len; i++) {
@@ -1385,7 +1394,7 @@ void atom_cmd_start(CmdFrame *old, int cmdchar)
     .origin = atom_origin(),
     .visual = Visual,
     .keytyped = KeyTyped,
-    .keyclass = atom_key_class(cmdchar, NUL),
+    .keyclass = atom_key_class(cmdchar, NUL, NUL),
     .ex_normal = ex_normal_busy,
     .captures = atom_captures,
     .global_ops = global_ops,
@@ -1441,7 +1450,7 @@ static bool atom_capture_cmd(cmdarg_T *ca, CmdFrame *old)
   //
   const bool user = atom_is_user_cmd();
   const CmdFrame *root = root_frame();
-  const unsigned keycls = atom_key_class(ca->cmdchar, ca->nchar);
+  const unsigned keycls = atom_key_class(ca->cmdchar, ca->nchar, ca->extra_char);
   // Opaque cmd that changed nothing is invisible; one that changed the buffer/selection voids the
   // pending visual atom (see `kKeyOpaque`).
   //
@@ -1563,10 +1572,11 @@ static bool atom_capture_cmd(cmdarg_T *ca, CmdFrame *old)
       // The payload ('operatorfunc' getchar()) is not in the captured redo, append it.
       atom_payload_append(&atom, old);
 
-      // Cascade only an observable "effect": edit, register-write, or cursor-move (only during
-      // follow-mode).
-      bool effect = changed || reg_max_ts(true) > old->reg_ts
-                    || (mc_following() && atom_origin_moved(old->origin));
+      // Cascade only an observable, non-global-op "effect": edit, register-write, or cursor-move
+      // (only during follow-mode).
+      bool effect = (changed || reg_max_ts(true) > old->reg_ts
+                     || (mc_following() && atom_origin_moved(old->origin)))
+                    && global_ops == old->global_ops;
       if (atom.keys != NULL && *atom.keys != NUL) {
         atom.origin = old->origin;
         atom_push(effect, &atom);

@@ -52,6 +52,7 @@ typedef struct {
   linenr_T line_count;     ///< number of lines from op_start to op_end (inclusive)
   bool empty;              ///< op_start and op_end the same (only used by op_change())
   bool is_VIsual;          ///< operator on Visual area
+  bool from_visual;        ///< Started in Visual. For "zq" (which ends Visual, to accept a motion).
   colnr_T start_vcol;      ///< start col for block mode operator
   colnr_T end_vcol;        ///< end col for block mode operator
   int prev_opcount;        ///< ca.opcount saved for K_EVENT
@@ -98,6 +99,7 @@ typedef struct {
   int select_reg;         ///< Register name for Select mode.
   bool select_exclu_adj;  ///< Cursor was incremented during exclusive selection.
   int restart_select;     ///< Restart Select mode when next cmd finished.
+  bool need_end;          ///< End Visual mode when the cmd finishes.
   int reselect;           ///< Restart the selection after a Select-mode mapping or menu.
   int mode;               ///< Type of Visual mode: 'v', 'V', Ctrl-V.
   VisualExtent resel;     ///< Previous Visual area's extent, for {count}v reselect.

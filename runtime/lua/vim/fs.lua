@@ -94,6 +94,7 @@ function M.dirname(file)
     return nil
   end
   vim.validate('file', file, 'string')
+  --- @cast file string
   local dir = vim.fn.fnamemodify(file, ':h')
   if iswin then
     return (dir:gsub(os_sep, '/'))
@@ -112,6 +113,7 @@ function M.basename(file)
     return nil
   end
   vim.validate('file', file, 'string')
+  --- @cast file string
   local name = vim.fn.fnamemodify(file, ':t')
   if iswin then
     return (name:gsub(os_sep, '/'))
@@ -633,8 +635,8 @@ end
 --- @return string? # Directory path containing one of the given markers, or nil if no directory was
 ---                   found.
 function M.root(source, marker)
-  assert(source, 'missing required argument: source')
-  assert(marker, 'missing required argument: marker')
+  vim.validate('source', source, { 'number', 'string' })
+  vim.validate('marker', marker, { 'string', 'table', 'function' })
 
   local path ---@type string
   if type(source) == 'string' then

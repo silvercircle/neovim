@@ -649,16 +649,16 @@ list_missing_vimpatches() {
     git_log_args+=("$i")
   done
 
-  missing_numbers=$(_git -C "${VIM_SOURCE_DIR}" log --reverse --since="${VIM_VERSION_0_DATE}" --no-walk --tags --format='%(decorate:prefix=,suffix=,tag=)' "${git_log_args[@]}" |
-    grep -v -e 'HEAD' |
+  missing_numbers=$(_git -C "${VIM_SOURCE_DIR}" log --decorate-refs='refs/tags/*' --reverse --since="${VIM_VERSION_0_DATE}" --no-walk --tags --format='%(decorate:prefix=,suffix=,tag=)' "${git_log_args[@]}" |
     grep -v -F -f <(list_vimpatch_numbers) |
     sed -E 's/,.*$//')
-  missing_hashes=$(_git -C "${VIM_SOURCE_DIR}" log --reverse --since="${VIM_VERSION_0_DATE}" --format='%H%D' "${git_log_args[@]}" |
-    grep -v -e 'tag:' -e 'HEAD' |
+  missing_hashes=$(_git -C "${VIM_SOURCE_DIR}" log --decorate-refs='refs/tags/*' --reverse --since="${VIM_VERSION_0_DATE}" --format='%H%D' "${git_log_args[@]}" |
+    grep -v -e 'tag:' |
     grep -v -f <(list_vimpatch_hashes | sed -E 's/(.*)/^\1/'))
   if test -n "${git_log_format}"; then
-    echo "${missing_numbers}" | _git --no-pager -C "${VIM_SOURCE_DIR}" log --no-walk --stdin --format="%d: ${git_log_format}"
-    echo "${missing_hashes}" | _git --no-pager -C "${VIM_SOURCE_DIR}" log --no-walk --stdin --format="%H: ${git_log_format}"
+    (echo "${missing_numbers}"; echo "${missing_hashes}") |
+      _git --no-pager -C "${VIM_SOURCE_DIR}" log --decorate-refs='refs/tags/*' --reverse --no-walk --stdin --format="%H%x00%d%x00: ${git_log_format}" |
+      awk -F '\0' '{ print $2 ? $2$3 : $1$3 }'
   else
     echo "${missing_numbers}"
     echo "${missing_hashes}"
@@ -874,8 +874,10 @@ is_na_patch() {
           '-I^\s+$' \
           '-I^[-=]+$' \
           '-I^(Functions:|GUI|Other)\s~$' \
+          '-I^[A-Z]\s+\*\+sodium\*\s+compiled with ' \
           '-I^\|(ch|popup)_[_a-z]+\(\)\|' \
           '-I^popup_[_a-z]+\(' \
+          '-I^sodium\s+Compiled with ' \
           '-I\*\s+For Vim version [0-9]\.[0-9]\.\s+Last change: [0-9]+ [A-Z][a-z]+ [0-9]+' \
           '-I compiled (with|without) .*\(\|.+\|\) feature\.$' \
           '-I\{.+ (available|compiled) (with|without) .+\}' \
@@ -1018,7 +1020,7 @@ is_na_patch() {
           '-IEVENT_TERMINALWINOPEN' \
           '-I^#\s*include\s+<proto/' \
           '-I^\s+\{"ch_[_a-z]+",.*\sFEARG_[1-9],\s+arg[1-9]+_' \
-          '-I^\s+\{"(popup|prop|sound)_[_a-z]+",.*f_(popup|prop|sound)_[_a-z]+},$' \
+          '-I^\s+\{"(popup|prop|sound)_[_a-z]+",.*f_(popup|prop|sound)_[_a-z]+\)?},$' \
           '-I^\s+ret_[a-z]+,\s+(JOB|PROP)_FUNC\(f_.+\)},$' \
           '-I^\s*(static)?\s(char(|_u)|hashtab_T|int|void)( \*)?$' \
           '-I^static\s(char(|_u)|hashtab_T|int|void)\s\*?[^*]+\(.+\);$' \
@@ -1054,12 +1056,10 @@ is_na_patch() {
 list_na_patches() {
   list_missing_vimpatches 0 | while read -r patch; do
     if is_na_patch "$patch"; then
-      GIT_MSG="$(_git -C "${VIM_SOURCE_DIR}" log -1 --oneline "$patch")"
-      if (echo "$patch" | grep -q '^v[0-9]\.[0-9]\.[0-9]') && (echo "${GIT_MSG}" | grep -q ' patch [0-9]\.'); then
-        # shellcheck disable=SC2001
-        echo "vim-patch:$(echo "${GIT_MSG}" | sed 's/^[0-9a-zA-Z]\+ patch //')"
+      if (echo "$patch" | grep -q '^v[0-9]\.[0-9]\.[0-9]') && _git -C "${VIM_SOURCE_DIR}" show-ref --exists "refs/tags/$patch" 2>/dev/null; then
+        echo "vim-patch:${patch:1}: $(_git -C "${VIM_SOURCE_DIR}" log -1 --format="%s" "$patch")"
       else
-        echo "vim-patch:${GIT_MSG}"
+        echo "vim-patch:$(_git -C "${VIM_SOURCE_DIR}" log -1 --oneline "$patch")"
       fi
     fi
   done
