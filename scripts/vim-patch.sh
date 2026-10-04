@@ -626,10 +626,13 @@ list_missing_vimpatches() {
   VIM_VERSION_0_DATE=2018-05-17:15:00:00Z
 
   local extended_format=$1; shift
+
+  # XXX(@janlazo): Delimiter "%x00" required to detect tagged commits
+  # https://git-scm.com/docs/git-log#Documentation/git-log.txt-x00
   if [[ "$extended_format" == 1 ]]; then
-    git_log_format="%s"
+    git_log_format="%H%x00%d%x00: %s"
   else
-    git_log_format=""
+    git_log_format="%H%x00%(decorate:prefix=,suffix=,tag=)"
   fi
 
   # Massage arguments for git-log.
@@ -649,20 +652,15 @@ list_missing_vimpatches() {
     git_log_args+=("$i")
   done
 
-  missing_numbers=$(_git -C "${VIM_SOURCE_DIR}" log --decorate-refs='refs/tags/*' --reverse --since="${VIM_VERSION_0_DATE}" --no-walk --tags --format='%(decorate:prefix=,suffix=,tag=)' "${git_log_args[@]}" |
+  missing_numbers=$(_git -C "${VIM_SOURCE_DIR}" log --decorate-refs='refs/tags/*' --reverse --since="${VIM_VERSION_0_DATE}" --no-walk --tags --format='%(decorate:prefix=,suffix=,tag=)' |
     grep -v -F -f <(list_vimpatch_numbers) |
-    sed -E 's/,.*$//')
-  missing_hashes=$(_git -C "${VIM_SOURCE_DIR}" log --decorate-refs='refs/tags/*' --reverse --since="${VIM_VERSION_0_DATE}" --format='%H%D' "${git_log_args[@]}" |
+    grep -oE 'v[0-9]+\.[0-9]+\.[0-9]{4}')
+  missing_hashes=$(_git -C "${VIM_SOURCE_DIR}" log --decorate-refs='refs/tags/*' --reverse --since="${VIM_VERSION_0_DATE}" --format='%H%D' |
     grep -v -e 'tag:' |
     grep -v -f <(list_vimpatch_hashes | sed -E 's/(.*)/^\1/'))
-  if test -n "${git_log_format}"; then
-    (echo "${missing_numbers}"; echo "${missing_hashes}") |
-      _git --no-pager -C "${VIM_SOURCE_DIR}" log --decorate-refs='refs/tags/*' --reverse --no-walk --stdin --format="%H%x00%d%x00: ${git_log_format}" |
-      awk -F '\0' '{ print $2 ? $2$3 : $1$3 }'
-  else
-    echo "${missing_numbers}"
-    echo "${missing_hashes}"
-  fi
+  (echo "${missing_numbers}"; echo "${missing_hashes}") |
+    _git --no-pager -C "${VIM_SOURCE_DIR}" log --decorate-refs='refs/tags/*' --reverse --no-walk --stdin --format="${git_log_format}" "${git_log_args[@]}" |
+    awk -F '\0' '{ print $2 ? $2$3 : $1$3 }'
 }
 
 # Prints a human-formatted list of Vim commits, with instructional messages.
@@ -859,6 +857,7 @@ is_na_patch() {
   local NA_HUNKS_C="$NVIM_SOURCE_DIR/scripts/vim_na_hunks_c.txt"
   local NA_HUNKS_H="$NVIM_SOURCE_DIR/scripts/vim_na_hunks_h.txt"
   local NA_HUNKS_HELP="$NVIM_SOURCE_DIR/scripts/vim_na_hunks_help.txt"
+  local NA_HUNKS_MAKE_PO="$NVIM_SOURCE_DIR/scripts/vim_na_hunks_make_po.txt"
   local NA_HUNKS_VIM="$NVIM_SOURCE_DIR/scripts/vim_na_hunks_vim.txt"
 
   local FILES_REMAINING HUNKS HUNK_NUM_FINAL
@@ -916,11 +915,7 @@ is_na_patch() {
           "$patch" -- "${file}")
         if test -n "$HUNKS"; then
           # shellcheck disable=SC2016
-          HUNK_NUM_FINAL=$(echo "$HUNKS" | grep '^@@ .* @@' | sed 's/^@@ .* @@ //' | grep -cv \
-            -e '^\$([_A-Z]\+)\.pot:' \
-            -e '^clean:' \
-            -e '^g\?vim\.desktop:' \
-            )
+          HUNK_NUM_FINAL=$(echo "$HUNKS" | grep '^@@ .* @@' | sed 's/^@@ .* @@ //' | grep -cv -f "$NA_HUNKS_MAKE_PO")
           test "$HUNK_NUM_FINAL" -ne 0 && return 1
         fi
         ;;
@@ -979,6 +974,7 @@ is_na_patch() {
           '-I^EXTERN char e_cannot_use_a_return_type_with_new' \
           '-I^EXTERN char e_dictionary_not_set' \
           '-I^EXTERN char e_dictnull' \
+          '-I^EXTERN char e_failed_to_source_defaults' \
           '-I^EXTERN char e_gethostbyname_in_channel_' \
           '-I^EXTERN char e_invalid_identifier_in_defineannotype' \
           '-I\sINIT\(= .+"E[0-9]+: (Abstract|Const|Class|Enum|Final|Interface|Public|Static|Type) ' \
@@ -989,6 +985,7 @@ is_na_patch() {
           '-I\sINIT\(= .+"E649: Invalid identifier name in defineAnnoType' \
           '-I\sINIT\(= .+"E1016: Cannot declare .* variable: ' \
           '-I\sINIT\(= .+"E1103: Dictionary not set' \
+          '-I\sINIT\(= .+"E1187: .*defaults\.vim' \
           '-I\sINIT\(= .+"E1365: Cannot use a return type with the \\"new\\" function"' \
           '-I\sINIT\(= .+"E1370: Cannot define a .+ as static' \
           '-I\sINIT\(= .+"E15[0-9]+: Cannot use .*listener_add in a .* listener callback"' \
@@ -1032,6 +1029,7 @@ is_na_patch() {
           '-I = skip_type\(.+\);$' \
           '-Icheck_typval_type\(.+\)' \
           '-Icrypt_get_method_nr\(.+\)' \
+          '-Ie_failed_to_source_defaults' \
           '-Imsg\(.*".*GTK.*"\)' \
           '-I\spopup_set_firstline\(.+\);' \
           '-I\sredraw_tabpanel =' \
