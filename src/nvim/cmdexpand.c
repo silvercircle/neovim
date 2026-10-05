@@ -1678,11 +1678,8 @@ static void set_context_for_wildcard_arg(exarg_T *eap, const char *arg, bool use
 
   // Check for environment variable.
   if (*xp->xp_pattern == '$') {
-    for (p = xp->xp_pattern + 1; *p != NUL; p++) {
-      if (!vim_isIDc((uint8_t)(*p))) {
-        break;
-      }
-    }
+    p = xp->xp_pattern + 1;
+    p += env_name_len(p);
     if (*p == NUL) {
       xp->xp_context = EXPAND_ENV_VARS;
       xp->xp_pattern++;

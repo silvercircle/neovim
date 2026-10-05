@@ -13,6 +13,16 @@ local eval = n.eval
 local setenv = n.fn.setenv
 
 describe('vim.fn.environ()', function()
+  it("$VAR reads (multibyte) envvar, irrespective of 'isident'", function()
+    -- Decoy envvar "\195" (the first byte of "é"): $é must not read it. (Windows can't set it.)
+    clear({ env = { ['é'] = 'x', ['aあ'] = 'y', ['\195'] = not t.is_os('win') and 'bad' or nil } })
+    command('set isident=') -- Does not matter.
+    eq('x', eval('$é'))
+    eq('y', eval('$aあ'))
+    command("cgetexpr ['$é/$aあ-z:1:text']") -- Quickfix expands $VAR in filenames.
+    eq('x/y-z', n.fn.bufname(n.fn.getqflist()[1].bufnr))
+  end)
+
   it('exists() handles empty env variable', function()
     clear({ env = { EMPTY_VAR = '' } })
     eq(1, exists('$EMPTY_VAR'))

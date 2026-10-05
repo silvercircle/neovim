@@ -637,8 +637,8 @@ int vim_strnsize(const char *s, int len)
   return size;
 }
 
-/// Check that "c" is a normal identifier character:
-/// Letters and characters from the 'isident' option.
+/// Checks that `c` is an identifier character, as decided by the 'isident' option.
+/// Chars >= 256 never are.
 ///
 /// @param  c  character to check
 bool vim_isIDc(int c)

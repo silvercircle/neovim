@@ -21,6 +21,7 @@
 #include "nvim/log.h"
 #include "nvim/macros_defs.h"
 #include "nvim/map_defs.h"
+#include "nvim/mbyte.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/option_vars.h"
@@ -32,10 +33,6 @@
 #include "nvim/types_defs.h"
 #include "nvim/version.h"
 #include "nvim/vim_defs.h"
-
-#ifdef MSWIN
-# include "nvim/mbyte.h"
-#endif
 
 #ifdef BACKSLASH_IN_FILENAME
 # include "nvim/fileio.h"
@@ -62,6 +59,44 @@ void env_init(void)
   nvim_testing = os_env_exists("NVIM_TEST", false);
 }
 
+/// Checks that `name` can be an env var name: not empty, and (Windows) valid UTF-8, which libuv
+/// needs to convert it to UTF-16.
+static bool env_name_valid(const char *name)
+{
+#ifdef MSWIN
+  return name[0] != NUL && utf_valid_string(name, NULL);
+#else
+  return name[0] != NUL;
+#endif
+}
+
+/// Gets the length (bytes) of the env var name at `p`.
+///
+/// Valid characters: ASCII letters/digits/"_", Unicode letters/marks/numbers. Same on all platforms
+/// (not controlled by 'isident').
+///
+/// Example: "aあ-b" => 4 bytes ("aあ").
+size_t env_name_len(const char *p)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
+{
+  const char *s = p;
+  while (true) {
+    if ((uint8_t)(*s) < 0x80) {
+      if (!ASCII_ISALNUM(*s) && *s != '_') {
+        break;
+      }
+      s++;
+      continue;
+    }
+    const int len = utf_ptr2len(s);
+    if (len == 1 || !utf_isalnum(utf_ptr2char(s))) {
+      break;  // Illegal byte, or not a letter/mark/number.
+    }
+    s += len;
+  }
+  return (size_t)(s - p);
+}
+
 /// Like getenv(), but returns NULL if the variable is empty.
 /// Result must be freed by the caller.
 /// @see os_env_exists
@@ -70,7 +105,7 @@ char *os_getenv(const char *name)
   FUNC_ATTR_NONNULL_ALL
 {
   char *e = NULL;
-  if (name[0] == NUL) {
+  if (!env_name_valid(name)) {
     return NULL;
   }
   int r = 0;
@@ -94,6 +129,7 @@ char *os_getenv(const char *name)
     e = xmemdupz(buf, size);
   }
 end:
+  assert(r != UV_EINVAL);
   if (r != 0 && r != UV_ENOENT && r != UV_UNKNOWN) {
     ELOG("uv_os_getenv(%s) failed: %d %s", name, r, uv_err_name(r));
   }
@@ -109,7 +145,7 @@ end:
 char *os_getenv_buf(const char *const name, char *const buf, const size_t bufsize)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (name[0] == NUL) {
+  if (!env_name_valid(name)) {
     return NULL;
   }
 
@@ -123,6 +159,7 @@ char *os_getenv_buf(const char *const name, char *const buf, const size_t bufsiz
     }
     xfree(e);
   }
+  assert(r != UV_EINVAL);
 
   if (r != 0 || size == 0 || buf[0] == NUL) {
     if (r != 0 && r != UV_ENOENT && r != UV_UNKNOWN) {
@@ -154,7 +191,7 @@ char *os_getenv_noalloc(const char *name)
 bool os_env_exists(const char *name, bool nonempty)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (name[0] == NUL) {
+  if (!env_name_valid(name)) {
     return false;
   }
   // Use a tiny buffer because we don't care about the value: if uv_os_getenv()
@@ -175,7 +212,7 @@ bool os_env_exists(const char *name, bool nonempty)
 int os_setenv(const char *name, const char *value, int overwrite)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (name[0] == NUL) {
+  if (!env_name_valid(name)) {
     return -1;
   }
 #ifdef MSWIN
@@ -212,7 +249,7 @@ int os_setenv(const char *name, const char *value, int overwrite)
 int os_unsetenv(const char *name)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (name[0] == NUL) {
+  if (!env_name_valid(name)) {
     return -1;
   }
   int r = uv_os_unsetenv(name);
@@ -594,7 +631,7 @@ size_t expand_env_esc(const char *restrict srcp, char *restrict dst, int dstlen,
 
 #ifdef UNIX
         // Unix has ${var-name} type environment vars
-        if (*tail == '{' && !vim_isIDc('{')) {
+        if (*tail == '{') {
           tail++;               // ignore '{'
           while (c-- > 0 && *tail != NUL && *tail != '}') {
             *var++ = *tail++;
@@ -602,9 +639,10 @@ size_t expand_env_esc(const char *restrict srcp, char *restrict dst, int dstlen,
         } else
 #endif
         {
-          while (c-- > 0 && *tail != NUL && vim_isIDc((uint8_t)(*tail))) {
-            *var++ = *tail++;
-          }
+          const size_t len = MIN(env_name_len(tail), (size_t)MAX(c, 0));
+          memcpy(var, tail, len);
+          var += len;
+          tail += len;
         }
 
 #ifdef UNIX
