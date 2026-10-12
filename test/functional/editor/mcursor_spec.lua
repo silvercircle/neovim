@@ -331,6 +331,14 @@ describe('multicursor', function()
       feed('x')
       eq({ 'b b b', 'xx b' }, get_lines())
 
+      -- "\%V" pattern matches in the selection ('< '>) only. #42302
+      clear_cursors()
+      cursors({ 'foo bar baz', 'bar baz foo', 'baz foo bar', '', 'foo' }, '')
+      feed('vip<Esc>/\\%Vfoo<CR>')
+      eq({ 3, 4 }, api.nvim_win_get_cursor(0))
+      feed('zqn')
+      eq({ { 0, 0 }, { 1, 8 }, { 2, 4 } }, anchors())
+
       -- In mappings: an operator alias ("gz"); an edit after "zq" applies at every cursor it placed.
       clear_cursors()
       n.exec_lua(function()
@@ -385,12 +393,18 @@ describe('multicursor', function()
       local screen = Screen.new(30, 5)
       cursors({ 'aa bb cc', 'dd ee' }, '')
       feed('zqw')
-      eq({ 1, 0 }, api.nvim_win_get_cursor(0))
       screen:expect({
+        grid = [[
+          {17:^a}a {17:b}b {17:c}c                      |
+          {17:d}d {17:ee}                         |
+          {1:~                             }|*2
+                                        |
+        ]],
         condition = function()
           eq('normal', screen.mode) -- Not "operator".
         end,
       })
+      eq({ 1, 0 }, api.nvim_win_get_cursor(0))
       -- ("w" on the last word stops at its end.)
       eq({ { 0, 0 }, { 0, 3 }, { 0, 6 }, { 1, 0 }, { 1, 3 }, { 1, 4 } }, anchors())
       -- A count applies to the motion ("2zqw" is "zq2w": every 2nd word).
@@ -713,7 +727,7 @@ describe('multicursor', function()
         _G.keys_seen, _G.cascading_seen = 0, false
         vim.on_key(function()
           _G.keys_seen = _G.keys_seen + 1
-          _G.cascading_seen = _G.cascading_seen or vim.api.nvim__mcursor_cascading()
+          _G.cascading_seen = _G.cascading_seen or vim.v.cascading
           if _G.keys_seen == 1000 then
             vim.fn.interrupt()
           end
@@ -1887,6 +1901,49 @@ describe('multicursor', function()
       end
     end)
 
+    it('edit not captured by redo (Lua/RPC) stays as previewed #42205', function()
+      n.exec_lua(function()
+        vim.keymap.set('i', '<C-j>', function()
+          vim.api.nvim_put({ 'X' }, 'c', false, true)
+        end)
+      end)
+      cursors({ 'foo', 'bar' }, 'QjQ')
+      feed('A<C-j>')
+      eq({ 'fooX', 'barX' }, get_lines())
+      feed('<Esc>')
+      eq({ 'fooX', 'barX' }, get_lines())
+      -- Cursors land on the last-inserted char, like the primary.
+      eq({ { 0, 3 }, { 1, 3 } }, anchors())
+      eq({ 2, 3 }, api.nvim_win_get_cursor(0))
+      -- Typed text around the edits; RPC edit (K_EVENT).
+      feed('a1<C-j>2')
+      api.nvim_put({ 'Y' }, 'c', false, true)
+      feed('3<Esc>')
+      eq({ 'fooX1X2Y3', 'barX1X2Y3' }, get_lines())
+      feed('u')
+      eq({ 'fooX', 'barX' }, get_lines())
+
+      -- Typed text after the edit still replays ('textwidth' wraps per cursor), non-literal keys
+      -- after it flush, and a session ended by the mapping (:stopinsert) or CTRL-C keeps it.
+      command('set textwidth=12')
+      command('imap <C-k> <C-j><Cmd>stopinsert<CR>')
+      for _, case in ipairs({
+        { 'Aab<C-j>cd ee ff<Esc>', { 'fooabXcd ee', 'ff', 'barabXcd ee', 'ff' } },
+        { 'A<C-j><Left>Y<BS><Esc>', { 'fooX', 'barX' } },
+        { 'A<C-k>', { 'fooX', 'barX' } },
+        { 'A<C-j>', { 'fooX', 'barX' }, '<C-c>' },
+      }) do
+        clear_cursors()
+        cursors({ 'foo', 'bar' }, 'QjQ')
+        feed(case[1])
+        if case[3] then
+          n.poke_eventloop() -- Mapping runs before CTRL-C interrupts.
+          feed(case[3])
+        end
+        eq(case[2], get_lines(), case[1])
+      end
+    end)
+
     it('mapping ending in a Normal-mode "tail", cascades #41864', function()
       command('inoremap <Esc> <Esc>l') -- the "<Esc>" leaves a Normal-mode tail ("l")
       api.nvim_buf_set_lines(0, 0, -1, true, { 'echo hi', 'echo bye' })
@@ -3056,9 +3113,7 @@ describe('multicursor', function()
 
     it('TextYankPost fires per cursor with per-cursor contents', function()
       command('let g:yanks = []')
-      command(
-        'autocmd TextYankPost * let g:yanks += [[v:event.regcontents, luaeval("vim.api.nvim__mcursor_cascading()")]]'
-      )
+      command('autocmd TextYankPost * let g:yanks += [[v:event.regcontents, v:cascading]]')
       cursors({ 'aaa', 'bbb' }, 'Qj')
       feed('yy')
       -- The primary's own yank fires first and is not a replay.
@@ -4170,5 +4225,34 @@ describe('multicursor', function()
       feed('x') -- User input, cascades.
       eq({ 'aa', 'b' }, get_lines())
     end)
+  end)
+
+  it('v:cascading', function()
+    n.exec_lua(function()
+      _G.cascade_log = {}
+      vim.keymap.set('n', 'gh', function()
+        local cur = vim.api.nvim_win_get_cursor(0)
+        table.insert(_G.cascade_log, { vim.v.cascading, cur })
+        vim.api.nvim_buf_set_text(0, cur[1] - 1, cur[2], cur[1] - 1, cur[2], { 'x' })
+      end)
+    end)
+
+    local function assert(mcursor_init)
+      cursors({ 'aaa', 'bbb', 'ccc' }, mcursor_init)
+      eq(false, api.nvim_get_vvar('cascading'))
+      feed('gh')
+      eq({ 'xaaa', 'xbbb', 'xccc' }, get_lines())
+      eq(
+        { { false, { 3, 0 } }, { true, { 1, 0 } }, { true, { 2, 0 } } },
+        n.exec_lua('return _G.cascade_log')
+      )
+      eq(false, api.nvim_get_vvar('cascading'))
+
+      clear_cursors()
+      n.exec_lua('_G.cascade_log = {}')
+    end
+
+    assert('QjQj')
+    assert('QjQjQ')
   end)
 end)

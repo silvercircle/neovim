@@ -26,6 +26,7 @@
 #include "nvim/drawscreen.h"
 #include "nvim/errors.h"
 #include "nvim/eval/typval_defs.h"
+#include "nvim/eval/vars.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/extmark.h"
 #include "nvim/gettext_defs.h"
@@ -103,6 +104,7 @@ typedef struct {
 /// The boundary:
 /// - literal text is previewed
 /// - non-literal keys (mc_ins_keys_nonliteral) have per-cursor effects, so flush (early commit).
+/// - non-captured cursor-moves and edits keep the previews (see mc_ins_cascade_restart).
 static struct {
   CmdOrigin origin;  ///< State at session start: the session's atoms diff against it.
   kvec_t(uint32_t) regions;  ///< Per-cursor preview regions (`mc_session_ns`).
@@ -236,6 +238,7 @@ static void mc_sandbox_enter(McSandbox *sb, bool save_regs)
 {
   assert(!mc_replay);
   mc_replay = true;  // Capture hooks will ignore keys fed during the sandbox.
+  set_vim_var_bool(VV_CASCADING, kBoolVarTrue);
   sb->primary = (Context)CONTEXT_INIT;
   // Change/Visual marks belong to the primary cursor's (already executed) operation.
   // (jumplist/changelist are owned by the primary.)
@@ -285,6 +288,7 @@ static void mc_sandbox_leave(McSandbox *sb)
   }
   ctx_free(&sb->primary);
   mc_replay = false;
+  set_vim_var_bool(VV_CASCADING, kBoolVarFalse);
 }
 
 /// Cascade step: replays an atom at `cursoridx` and updates Context.
@@ -792,8 +796,9 @@ static bool mc_ins_keys_nonliteral(const char *keys, size_t len)
   return false;
 }
 
-/// Capture restarted mid insert-session (stop_arrow(), after a non-captured cursor-move: mouse,
-/// <PageUp>, …). The previews stay; rebase and continue the insert-cascade.
+/// Capture restarted mid insert-session, after a non-captured cursor-move (stop_arrow(): mouse,
+/// <PageUp>, …) or edit (<Cmd>, Lua mapping, RPC, …). The previews stay; rebase and continue the
+/// insert-cascade.
 void mc_ins_cascade_restart(void)
 {
   if (!mc_ins_span.active || mc_replaying() || !(State & MODE_INSERT)
@@ -1294,15 +1299,14 @@ static visualinfo_T mc_zq_target(pos_T step, bool search, MotionType motion_type
 {
   const visualinfo_T save = curbuf->b_visual;
   const int save_mode_eval = curbuf->b_visual_mode_eval;
-  // Search: lnum=0 if "gn" finds no match.
-  curbuf->b_visual = search ? (visualinfo_T){ 0 }
-                            : (visualinfo_T){ .vi_start = step, .vi_end = step,
-                                              .vi_curswant = step.col,
-                                              .vi_mode = motion_type == kMTLineWise ? 'V' : 'v' };
-  curbuf->b_visual_mode_eval = curbuf->b_visual.vi_mode;
-  if (search) {
-    mc_zq_step("gn\033", step);  // Selects the match at `step`; <Esc> stores it as '< '>.
+  if (!search) {
+    curbuf->b_visual = (visualinfo_T){ .vi_start = step, .vi_end = step, .vi_curswant = step.col,
+                                       .vi_mode = motion_type == kMTLineWise ? 'V' : 'v' };
+  } else if (mc_zq_step("gn\033", step).lnum == 0) {
+    // "gn" selects at `step`; ESC stores it as '< '>. Until then '< '> is the user's, for "\%V".
+    curbuf->b_visual = (visualinfo_T){ 0 };  // No match.
   }
+  curbuf->b_visual_mode_eval = curbuf->b_visual.vi_mode;
   if (ctx != NULL) {
     curwin->w_cursor = step;
     ctx_save(ctx, kCtxVisual);  // Tracks the marks by extmark.
