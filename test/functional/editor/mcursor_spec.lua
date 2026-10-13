@@ -737,6 +737,7 @@ describe('multicursor', function()
       feed('x') -- Primary edit + cascade over ~5000 cursors...
       n.poke_eventloop()
       eq(true, n.exec_lua('return _G.cascading_seen'))
+      eq(false, api.nvim_get_vvar('cascading')) -- Reset by the interrupted cascade.
       local edited, unedited = 0, 0
       for _, l in ipairs(get_lines()) do
         if l == 'aa' then
@@ -953,6 +954,73 @@ describe('multicursor', function()
         cursors({ 'a', 'b', 'c' }, place)
         feed(',n')
         eq({ '1a', '2b', '3c' }, get_lines(), place)
+      end
+    end)
+
+    it('payload mapping (getchar, like vim-surround "ds") cascades', function()
+      -- Mapping that edits via :normal, queues no cascadable atom (its own ":call" atom is
+      -- emit-only). It cascades by LHS + the getchar() payload.
+      n.exec(t_atom.delsurround_vim)
+      fn.setline(1, { 'a (one)', 'b (two)', 'c (three)' })
+      feed('gg0f(Qj0f(Qj0f(')
+      atoms_start()
+      feed('ds)') -- ")" is the getchar()'d payload
+      eq({ 'a one', 'b two', 'c three' }, get_lines())
+      -- The emitted atom carries the resolution plus the getchar()'d payload; the cascade
+      -- itself re-runs `lhs` (the edit is invisible, so nothing was queued for it).
+      local ev = atoms()[#atoms()]
+      eq_partial({ lhs = 'ds)', keys = ':call DelSurround()\n)' }, ev)
+
+      -- Mapping that produces no capturable keys (kKeyOpaque): <Cmd>, K_LUA. Cascades LHS.
+      command('nnoremap <F3> <Cmd>normal! x<CR>')
+      n.exec_lua([[vim.keymap.set('n', '<F4>', function() vim.cmd('normal! x') end)]])
+      for _, lhs in ipairs({ '<F3>', '<F4>' }) do
+        clear_cursors()
+        fn.setline(1, { 'aaa', 'bbb', 'ccc' })
+        feed('gg0QjQj')
+        feed(lhs)
+        eq({ 'aa', 'bb', 'cc' }, get_lines())
+      end
+
+      -- Op-pending payload mapping (vim-sneak :omap) cascades by `keys`.
+      n.exec(t_atom.minisneak_vim)
+      clear_cursors()
+      fn.setline(1, { 'aa (x) here', 'bb (y) here', 'cc (z) here' })
+      feed('gg0QjQj')
+      feed('dzhe')
+      eq({ 'here', 'here', 'here' }, get_lines())
+
+      -- Lua :omap textobject (starts Visual mode, |omap-info|) cascades by `keys`. #41482
+      n.exec_lua([[
+          vim.keymap.set('o', 'gt', function()
+            vim.cmd('normal! viw')
+          end)
+        ]])
+      clear_cursors()
+      fn.setline(1, { 'aaa xxx', 'bbb yyy', 'ccc zzz' })
+      feed('gg0wQj0wQj0w')
+      feed('dgt')
+      eq({ 'aaa ', 'bbb ', 'ccc ' }, get_lines())
+
+      -- Payload mapping (getcharstr()) cascades in Normal and Visual mode. #42280
+      n.exec_lua(function()
+        _G.rhs = function()
+          local char = vim.fn.getcharstr()
+          local cursor = vim.api.nvim_win_get_cursor(0)
+          vim.api.nvim_buf_set_text(0, cursor[1] - 1, cursor[2], cursor[1] - 1, cursor[2], { char })
+        end
+        vim.keymap.set('n', 'gh', _G.rhs)
+        vim.keymap.set('x', 'gh', _G.rhs)
+        vim.keymap.set('x', 'gl', ':<C-u>lua _G.rhs()<CR>')
+        vim.keymap.set('x', 'gk', '<Cmd>lua _G.rhs()<CR>')
+      end)
+      for _, keys in ipairs({ 'ghx', 'vghx', 'vglx', 'vgkx' }) do
+        clear_cursors()
+        api.nvim_buf_set_lines(0, 0, -1, true, { 'aaa', 'bbb', 'ccc' })
+        feed('gg0vipQ')
+        feed(keys)
+        eq({ 'xaaa', 'xbbb', 'xccc' }, get_lines(), keys)
+        feed('<Esc>')
       end
     end)
   end)
@@ -1583,6 +1651,14 @@ describe('multicursor', function()
       command('let v:oldfiles = ["/a", "/b"] | let @a = "reg"')
       local screen = Screen.new(30, 6)
       cursors({ 'aaa', 'bbb', 'ccc' })
+      n.exec_lua(function()
+        _G.edits = {}
+        vim.api.nvim_buf_attach(0, false, {
+          on_bytes = function(_, _, _, row)
+            table.insert(_G.edits, { row, vim.v.cascading })
+          end,
+        })
+      end)
       -- Still in insert mode (no <Esc> yet): the text already cascaded; each cursor displays
       -- at its insertion point, like the primary.
       feed('iXY')
@@ -1593,6 +1669,8 @@ describe('multicursor', function()
         {1:~                             }|*2
         {5:-- INSERT --}                  |
       ]])
+      -- The previews are cascade edits (v:cascading), the primary's are not.
+      eq({ { 2, false }, { 0, true }, { 1, true } }, n.exec_lua('return _G.edits'))
       feed('<Esc>')
       eq({ 'XYaaa', 'XYbbb', 'XYccc' }, get_lines())
       -- The session end shifts every cursor onto the last inserted char.
@@ -3488,7 +3566,6 @@ describe('multicursor', function()
 
   describe("'operatorfunc' (g@)", function()
     it('VISUAL-mode surround ("S") cascades', function()
-      pending('visual ":" LHS-replay: the visual selection differs per cursor; TODO')
       -- Minimal vim-surround "S": VSurround is an Ex command plus a getchar()
       -- payload: `:<C-U>call <SID>opfunc(visualmode(),...)<CR>` + the wrap char.
       n.exec([=[
@@ -3610,58 +3687,6 @@ describe('multicursor', function()
       feed('ciwWORD<Esc>') -- a typed edit cascades to the opfunc-placed cursors
       eq({ 'WORD a WORD', 'b WORD c' }, get_lines())
     end)
-
-    it(
-      'payload mapping (":call" + getchar, like vim-surround "ds") cascades via LHS-replay',
-      function()
-        -- A mapping whose edit is done through :normal is invisible to atom
-        -- capture (decide-once sees nothing). It cascades by re-running the
-        -- mapping (LHS + the getchar()'d target) at each cursor: LHS-replay.
-        n.exec(t_atom.delsurround_vim)
-        fn.setline(1, { 'a (one)', 'b (two)', 'c (three)' })
-        feed('gg0f(Qj0f(Qj0f(')
-        atoms_start()
-        feed('ds)') -- ")" is the getchar()'d payload
-        eq({ 'a one', 'b two', 'c three' }, get_lines())
-        -- The emitted atom carries the resolution plus the getchar()'d payload; the cascade
-        -- itself re-runs `lhs` (the edit is invisible, so nothing was queued for it).
-        local ev = atoms()[#atoms()]
-        eq_partial({ lhs = 'ds)', keys = ':call DelSurround()\n)' }, ev)
-
-        -- Same for a mapping that produces NO capturable keys at all (kKeyOpaque):
-        -- "<Cmd>" (K_COMMAND) and a Lua callback (K_LUA). Both are real user
-        -- keystrokes, so their edit is a mapping edit and cascades by LHS-replay.
-        command('nnoremap <F3> <Cmd>normal! x<CR>')
-        n.exec_lua([[vim.keymap.set('n', '<F4>', function() vim.cmd('normal! x') end)]])
-        for _, lhs in ipairs({ '<F3>', '<F4>' }) do
-          clear_cursors()
-          fn.setline(1, { 'aaa', 'bbb', 'ccc' })
-          feed('gg0QjQj')
-          feed(lhs)
-          eq({ 'aa', 'bb', 'cc' }, get_lines())
-        end
-
-        -- Op-pending payload mapping (vim-sneak :omap) cascades by `keys`.
-        n.exec(t_atom.minisneak_vim)
-        clear_cursors()
-        fn.setline(1, { 'aa (x) here', 'bb (y) here', 'cc (z) here' })
-        feed('gg0QjQj')
-        feed('dzhe')
-        eq({ 'here', 'here', 'here' }, get_lines())
-
-        -- Lua :omap textobject (starts Visual mode, |omap-info|) cascades by `keys` too. #41482
-        n.exec_lua([[
-          vim.keymap.set('o', 'gt', function()
-            vim.cmd('normal! viw')
-          end)
-        ]])
-        clear_cursors()
-        fn.setline(1, { 'aaa xxx', 'bbb yyy', 'ccc zzz' })
-        feed('gg0wQj0wQj0w')
-        feed('dgt')
-        eq({ 'aaa ', 'bbb ', 'ccc ' }, get_lines())
-      end
-    )
   end)
 
   describe(']C and [C', function()
@@ -3734,6 +3759,37 @@ describe('multicursor', function()
       fn.setline(1, { 'aaa' })
       feed('gg0')
       eq(0, fn.assert_beeps('normal! ]C'))
+      eq({ 1, 0 }, cur())
+    end)
+
+    it('without a session, jumps to the previous cursors #42166', function()
+      cursors({ 'aaa bbb', 'ccc ddd', 'eee fff' }, 'wQjQj')
+      clear_cursors()
+      feed('gg0]C')
+      eq({ 1, 4 }, cur())
+      feed(']C')
+      eq({ 2, 4 }, cur())
+      feed(']C') -- The previous primary-cursor position.
+      eq({ 3, 4 }, cur())
+      feed(']C') -- wraps
+      eq({ 1, 4 }, cur())
+      feed('[C') -- wraps
+      eq({ 3, 4 }, cur())
+      eq(0, ncursors()) -- Does not start a session.
+      -- Works as an operator motion (no cascade).
+      feed('gg0d]C')
+      eq({ 'bbb', 'ccc ddd', 'eee fff' }, get_lines())
+      -- Still not an operator motion during a session.
+      feed('Q')
+      eq(0, fn.assert_beeps('normal! d]C'))
+      eq({ 'bbb', 'ccc ddd', 'eee fff' }, get_lines())
+    end)
+
+    it('without a session, skips a duplicate previous primary-cursor position', function()
+      cursors({ 'aaa', 'bbb', 'ccc' }, 'QjQ') -- The primary shares line 2 with a cursor.
+      clear_cursors()
+      feed('G0')
+      feed('3]C') -- 2 positions (not 3): wraps around to line 1
       eq({ 1, 0 }, cur())
     end)
   end)
@@ -4227,32 +4283,31 @@ describe('multicursor', function()
     end)
   end)
 
-  it('v:cascading', function()
+  it('vim.on_key() sees replayed keys (v:cascading), not internal keys', function()
+    cursors({ 'aaa', 'bbb', 'ccc' })
     n.exec_lua(function()
-      _G.cascade_log = {}
-      vim.keymap.set('n', 'gh', function()
-        local cur = vim.api.nvim_win_get_cursor(0)
-        table.insert(_G.cascade_log, { vim.v.cascading, cur })
-        vim.api.nvim_buf_set_text(0, cur[1] - 1, cur[2], cur[1] - 1, cur[2], { 'x' })
+      _G.keys = { [true] = {}, [false] = {} }
+      vim.on_key(function(key)
+        table.insert(_G.keys[vim.v.cascading], key)
       end)
     end)
-
-    local function assert(mcursor_init)
-      cursors({ 'aaa', 'bbb', 'ccc' }, mcursor_init)
-      eq(false, api.nvim_get_vvar('cascading'))
-      feed('gh')
-      eq({ 'xaaa', 'xbbb', 'xccc' }, get_lines())
-      eq(
-        { { false, { 3, 0 } }, { true, { 1, 0 } }, { true, { 2, 0 } } },
-        n.exec_lua('return _G.cascade_log')
-      )
-      eq(false, api.nvim_get_vvar('cascading'))
-
-      clear_cursors()
-      n.exec_lua('_G.cascade_log = {}')
+    local function keys(cascading)
+      return n.exec_lua(function(c)
+        return table.concat(_G.keys[c])
+      end, cascading)
     end
-
-    assert('QjQj')
-    assert('QjQjQ')
+    -- Not the Visual preview (fake selections) at the cursors.
+    feed('viw')
+    eq('viw', keys(false))
+    eq('', keys(true))
+    feed('d')
+    eq({ '', '', '' }, get_lines())
+    eq('viwd', keys(false))
+    eq('viwdviwd', keys(true))
+    -- Nor the "zq" steps.
+    api.nvim_buf_set_lines(0, 0, -1, true, { 'aa bb cc' })
+    clear_cursors()
+    feed('0zqw')
+    eq('viwd0zqw', keys(false))
   end)
 end)
