@@ -323,6 +323,41 @@ describe('messages2', function()
     ]])
   end)
 
+  it("uses global 'fillchars'", function()
+    command('set fillchars=msgsep:+')
+    command([[echo "foo\nbar"]])
+    screen:expect([[
+      ^                                                     |
+      {1:~                                                    }|*10
+      {3:+++++++++++++++++++++++++++++++++++++++++++++++++++++}|
+      foo                                                  |
+      bar                                                  |
+    ]])
+
+    command('wincmd v | setlocal fillchars=msgsep:!')
+    command([[echo "bar\nbaz"]])
+    screen:expect([[
+      ^                          │                          |
+      {1:~                         }│{1:~                         }|*8
+      {3:+++++++++++++++++++++++++++++++++++++++++++++++++++++}|
+      foo                                                  |
+      bar                                                  |*2
+      baz                                                  |
+    ]])
+
+    command('wincmd w')
+    command([[echo "baz\nqux"]])
+    screen:expect([[
+                                │^                          |
+      {1:~                         }│{1:~                         }|*6
+      {3:+++++++++++++++++++++++++++++++++++++++++++++++++++++}|
+      foo                                                  |
+      bar                                                  |*2
+      baz                                                  |*2
+      qux                                                  |
+    ]])
+  end)
+
   it('screenclear and empty message clears messages', function()
     command('echo "foo"')
     screen:expect([[
@@ -1155,7 +1190,8 @@ describe('messages2', function()
 
   it('configured targets per kind', function()
     exec_lua(function()
-      local targets = { echo = 'msg', list_cmd = 'pager', bufwrite = 'cmd', lua_print = 'cmd' }
+      local targets = { echo = 'msg', list_cmd = 'pager', lua_print = 'cmd' }
+      targets['nvim%.bufwrite'] = 'msg' -- Matches the message ID, not the kind.
       require('vim._core.ui2').enable({ msg = { targets = targets } })
       print('foo') -- "lua_print" kind goes to cmd
       vim.cmd.echo('"bar"') -- "echo" kind goes to msg
@@ -1195,9 +1231,10 @@ describe('messages2', function()
     command('edit Xfile | write')
     screen:expect([[
       ^                                                     |
-      {1:~                                                    }|*11
-      {1:~                                              }{4:bar(2)}|
-      "Xfile" [New] 0L, 0B written                         |
+      {1:~                                                    }|*10
+      {1:~                        }{4:bar                         }|
+      {1:~                        }{4:"Xfile" [New] 0L, 0B written}|
+      foo(1)                                               |
     ]])
   end)
 

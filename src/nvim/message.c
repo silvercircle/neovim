@@ -1111,16 +1111,30 @@ char *msg_may_trunc(bool force, char *s)
 /// Shows a progress-message.  A non-"running" `status` ends the message and announces the
 /// progress task as "done".
 ///
-/// @param s    Message text.  NULL ends the message without showing anything.
-/// @param err  Show as an error message.
-char *msg_progress(char *s, char *id, char *status, int hl_id, bool hist, bool trunc, bool err)
+/// @param s        Message text.  NULL ends the message without showing anything.
+/// @param percent  Progress percentage, or -1 if unknown.
+/// @param err      Show as an error message.
+char *msg_progress(char *s, char *id, char *status, int percent, int hl_id, bool hist, bool trunc,
+                   bool err)
 {
-  bool clear = false;
   MessageData data = {
     .source = cstr_as_string("nvim"),
     .status = cstr_as_string(status),
-    .percent = -1,
+    .percent = percent,
   };
+  return msg_with_id(s, id, "progress", &data, hl_id, hist, trunc, err);
+}
+
+/// Shows message `s` with `id`: replaces the message with the same `id`, if any.
+///
+/// @param s     Message text.  NULL ends a progress-message without showing anything.
+/// @param kind  Message kind, e.g. "progress".
+/// @param data  Progress-message data, or NULL.
+/// @param err   Show as an error message.
+char *msg_with_id(char *s, char *id, const char *kind, MessageData *data, int hl_id, bool hist,
+                  bool trunc, bool err)
+{
+  bool clear = false;
   HlMessage chunks = KV_INITIAL_VALUE;
   if (s != NULL) {
     if (hist && (!trunc || ui_has(kUIMessages))) {
@@ -1132,7 +1146,7 @@ char *msg_progress(char *s, char *id, char *status, int hl_id, bool hist, bool t
     kv_push(chunks, ((HlMessageChunk){ cstr_as_string(s), hl_id }));
   }
   msg_ext_no_fast();
-  msg_multihl(CSTR_AS_OBJ(id), chunks, "progress", false, err, &data, &clear, false);
+  msg_multihl(CSTR_AS_OBJ(id), chunks, kind, false, err, data, &clear, false);
   kv_destroy(chunks);
   ui_flush();
   return s;
@@ -1286,26 +1300,33 @@ void msg_hist_clear_temp(void)
   }
 }
 
-int messagesopt_changed(void)
+/// Check the 'messagesopt' fields after schema validation.
+const char *validate_messagesopt(optset_T *args)
 {
-  OptKeyDict_mopt *v = opt_keyset(p_mopt, kOptMessagesopt, NULL);
+  OptKeyDict_mopt *v = opt_keyset(args->os_newval.data.string.data, kOptMessagesopt, NULL);
 
   // Either "wait" or "hit-enter" is required; "history" always.
   if ((!v->hit_enter && !HAS_KEY(v, mopt, wait)) || !HAS_KEY(v, mopt, history)) {
-    return FAIL;
+    return e_invarg;
   }
   // "history" and "wait" must be <= 10000; "maxheight" is a percentage.
   if (v->history > 10000 || v->wait > 10000 || v->maxheight > 100) {
-    return FAIL;
+    return e_invarg;
   }
+  return NULL;
+}
+
+/// Process the updated 'messagesopt' option value.
+const char *did_set_messagesopt(optset_T *args FUNC_ATTR_UNUSED)
+{
+  OptKeyDict_mopt *v = opt_keyset(p_mopt, kOptMessagesopt, NULL);
 
   msg_hit_enter = v->hit_enter;
   msg_wait = (int)v->wait;
   progress_msg_target = strequal(v->progress, "c") ? PROGRESS_TARGET_CMD : 0;
   msg_hist_max = (int)v->history;
   msg_hist_clear(msg_hist_max);
-
-  return OK;
+  return NULL;
 }
 
 /// :messages command implementation

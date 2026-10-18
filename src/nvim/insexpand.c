@@ -174,6 +174,7 @@ struct compl_S {
   char *cp_commit_chars;         ///< commit characters, allocated. May be NULL.
   int cp_flags;                  ///< CP_ values
   int cp_number;                 ///< sequence number
+  int cp_order;                  ///< list position when first scored
   bool cp_preselect;             ///< preselect item
   int cp_score;                  ///< fuzzy match score or proximity score
   bool cp_in_match_array;        ///< collected by compl_match_array
@@ -1069,6 +1070,7 @@ static int ins_compl_add(char *const str, int len, char *const fname, char *cons
   // Copy the values to the new match structure.
   match = xcalloc(1, sizeof(compl_T));
   match->cp_number = flags & CP_ORIGINAL_TEXT ? 0 : -1;
+  match->cp_order = -1;
   new_str = new_str == NULL ? xstrnsave(str, (size_t)len) : new_str;
   match->cp_str = cbuf_as_string(new_str, (size_t)len);
   match->cp_commit_chars = commit_chars;
@@ -1508,7 +1510,12 @@ static int cp_compare_fuzzy(const void *a, const void *b)
 {
   int score_a = ((compl_T *)a)->cp_score;
   int score_b = ((compl_T *)b)->cp_score;
-  return (score_b > score_a) ? 1 : (score_b < score_a) ? -1 : 0;
+
+  if (score_a != score_b) {
+    return (score_b > score_a) ? 1 : -1;
+  }
+
+  return ((compl_T *)a)->cp_order - ((compl_T *)b)->cp_order;
 }
 
 static int cp_compare_nearest(const void *a, const void *b)
@@ -1616,8 +1623,14 @@ static void set_fuzzy_score(void)
   }
 
   // Score all completion matches
+  int next = 0;
   compl_T *comp = compl_first_match;
   do {
+    if (comp->cp_order < 0) {
+      comp->cp_order = next;
+    }
+    next = MAX(next, comp->cp_order + 1);
+
     if (use_leader) {
       pattern = get_leader_for_startcol(comp, true)->data;
     }
@@ -2097,7 +2110,7 @@ static void ins_compl_files(int count, char **files, bool thesaurus, int flags,
     FILE *fp = os_fopen(files[i], "r");  // open dictionary file
     if (flags != DICT_EXACT && !shortmess(kShmCompletionscan) && !compl_autocomplete) {
       vim_snprintf(IObuff, IOSIZE, _("Scanning dictionary: %s"), files[i]);
-      msg_progress(IObuff, "nvim.completion", "running", HLF_R, false, true, false);
+      msg_progress(IObuff, "nvim.completion", "running", -1, HLF_R, false, true, false);
     }
 
     if (fp == NULL) {
@@ -3678,7 +3691,9 @@ static void fill_complete_info_dict(dict_T *di, compl_T *match, bool add_match)
 {
   tv_dict_add_str_len(di, S_LEN("word"), match->cp_str.data, (int)match->cp_str.size);
   tv_dict_add_str(di, S_LEN("abbr"), match->cp_text[CPT_ABBR]);
-  tv_dict_add_str(di, S_LEN("menu"), match->cp_text[CPT_MENU]);
+  // Preserve the filename fallback displayed in the popup menu when items are reused.
+  tv_dict_add_str(di, S_LEN("menu"), match->cp_text[CPT_MENU] != NULL
+                  ? match->cp_text[CPT_MENU] : match->cp_fname);
   tv_dict_add_str(di, S_LEN("kind"), match->cp_text[CPT_KIND]);
   tv_dict_add_str(di, S_LEN("info"), match->cp_text[CPT_INFO]);
   tv_dict_add_str(di, S_LEN("abbr_hlgroup"), syn_id2name(match->cp_user_abbr_hl_id));
@@ -3946,7 +3961,7 @@ static int process_next_cpt_value(ins_compl_next_state_T *st, int *compl_type_ar
                    : st->ins_buf->b_sfname == NULL
                    ? st->ins_buf->b_fname
                    : st->ins_buf->b_sfname);
-      msg_progress(IObuff, "nvim.completion", "running", HLF_R, false, true, false);
+      msg_progress(IObuff, "nvim.completion", "running", -1, HLF_R, false, true, false);
     }
   } else if (*st->e_cpt == NUL) {
     status = INS_COMPL_CPT_END;
@@ -3980,7 +3995,7 @@ static int process_next_cpt_value(ins_compl_next_state_T *st, int *compl_type_ar
         compl_type = CTRL_X_TAGS;
         if (!shortmess(kShmCompletionscan) && !compl_autocomplete) {
           vim_snprintf(IObuff, IOSIZE, "%s", _("Scanning tags."));
-          msg_progress(IObuff, "nvim.completion", "running", HLF_R, false, true, false);
+          msg_progress(IObuff, "nvim.completion", "running", -1, HLF_R, false, true, false);
         }
       }
     }
@@ -6411,7 +6426,7 @@ int ins_complete(int c, bool enable_pum)
 
   if (!shortmess(kShmCompletionscan) && !compl_autocomplete) {
     // End the "Scanning..." progress-msg. ins_compl_show_statusmsg() already reported the result.
-    msg_progress(NULL, "nvim.completion", "success", 0, false, false, false);
+    msg_progress(NULL, "nvim.completion", "success", -1, 0, false, false, false);
   }
 
   // Show the popup menu, unless we got interrupted.

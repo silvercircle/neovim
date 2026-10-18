@@ -1,10 +1,10 @@
 *sign.txt*      Nvim
 
 
-		  VIM REFERENCE MANUAL	  by Gordon Prieur
-					  and Bram Moolenaar
+	  VIM REFERENCE MANUAL  by Gordon Prieur and Bram Moolenaar
 
 
+==============================================================================
 Sign Support Features				*sign-support*
 
                                       Type |gO| to see the table of contents.
@@ -111,6 +111,7 @@ See |sign_define()| for the equivalent Vim script function.
 		a full path.  The bitmap should fit in the place of two
 		characters.  This is not checked.  If the bitmap is too big it
 		will cause redraw problems.
+
 			toolkit		supports ~
 			Win32		.bmp, .ico, .cur
 
@@ -182,6 +183,8 @@ See |sign_place()| for the equivalent Vim script function.
 
 		The following optional sign attributes can be specified before
 		"file=":
+
+			Argument	Meaning ~
 			group={group}	Place sign in sign group {group}
 			priority={prio}	Assign priority {prio} to sign
 
@@ -207,8 +210,7 @@ See |sign_place()| for the equivalent Vim script function.
 			:sign place 10 line=99 name=sign3
 			:sign place 10 line=99 name=sign3 buffer=3
 <
-							*E885*
-:sig[n] place {id} name={name} file={fname}
+:sig[n] place {id} name={name} file={fname}		*E885*
 		Change the placed sign {id} in file {fname} to use the defined
 		sign {name}.  See remark above about {fname} |:sign-fname|.
 		This can be used to change the displayed sign without moving

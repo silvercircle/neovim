@@ -4,6 +4,7 @@
                             NVIM REFERENCE MANUAL
 
 
+==============================================================================
 Notable changes since Nvim 0.12                                 *news*
 
 For changes in the previous release, see |news-0.12|.
@@ -149,8 +150,8 @@ EVENTS
 • |vim.on_key()| callbacks are not invoked for keys consumed by |getchar()|.
 • |BufModifiedSet| has been removed. Use the |OptionSet| event with pattern
   "modified" instead.
-• |ui-messages| `msg_show.bufwrite` and `msg_show.completion` messages are now
-  `msg_show.progress` events.
+• |ui-messages| `msg_show.completion` messages are now `msg_show.progress`
+  events. If |:write| is slow it emits `msg_show.progress` events.
 
 LSP
 
@@ -266,6 +267,8 @@ DEFAULTS
 
 • 'rulerformat' default is exposed as a statusline expression (previously it
   was implemented as an internal C routine).
+• 'termpastefilter' no longer removes TAB chars ("HT") when pasting into
+  |:terminal|.
 
 DIAGNOSTICS
 
@@ -298,6 +301,10 @@ EDITOR
     normally. Async plugins no longer need special |CmdwinLeave| workarounds.
   • The |cmdwin-char| is shown via 'statuscolumn'.
 • |gf| and |<cfile>| support `file://…` URIs.
+• |:help| files can contain tables, see |help-table|. Example:
+  |supported-platforms| (https://neovim.io/doc/user/support/#supported-platforms).
+• |:help| documentation is available as PDF via:
+  https://neovim.io/doc/user/nvim-help.pdf
 • |:log| opens log files.
 • |:marks| can list |extmarks| for a given |namespace|.
 • |:marks| gained tab-completion.
@@ -397,6 +404,8 @@ LUA
 • |lua-async|: `vim.async` provides structured concurrency primitives for Lua
   code, including task handles, await helpers, cooperative cancellation,
   completion-order iteration, and semaphores.
+• |vim.inspect_pos()| and |vim.show_pos()| support byte ranges with `end_row`
+  and `end_col`. |:Inspect| accepts line ranges, including Visual selections.
 • |vim.ui.img| can display images. Use `:checkhealth vim.health` to confirm
   your terminal supports it.
 • |vim.net.request()| can specify custom headers by passing `opts.headers`.

@@ -4,6 +4,7 @@
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
 
 
+==============================================================================
 Multi-language features				*multilang* *multi-lang*
 
 This is about using messages and menus in various languages.  For editing
@@ -20,14 +21,14 @@ Vim picks up the locale from the environment.  In most cases this means Vim
 will use the language that you prefer, unless it's not available.
 
 To see a list of supported locale names on your system, look in one of these
-directories (for Unix):
-	/usr/lib/locale ~
-	/usr/share/locale ~
+directories (for Unix): >
+	/usr/lib/locale
+	/usr/share/locale
+<
 Unfortunately, upper/lowercase differences matter.  Also watch out for the
 use of "-" and "_".
 
-					    *:lan* *:lang* *:language* *E197*
-:lan[guage]
+:lan[guage]				*:lan* *:lang* *:language* *E197*
 :lan[guage] mes[sages]
 :lan[guage] cty[pe]
 :lan[guage] tim[e]
@@ -155,8 +156,7 @@ in a Vim script.  For a language that has no translation yet, please consider
 becoming the maintainer and make your translations available to all Vim users.
 Send an e-mail to the Vim maintainer <maintainer@vim.org>.
 
-					*:menut* *:menutrans* *:menutranslate*
-:menut[ranslate] clear
+:menut[ranslate] clear			*:menut* *:menutrans* *:menutranslate*
 			Clear all menu translations.
 
 :menut[ranslate] {english} {mylang}

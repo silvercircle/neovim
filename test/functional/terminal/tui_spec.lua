@@ -178,6 +178,8 @@ describe('TUI :detach', function()
     t.retry(nil, 2000, function()
       assert(vim.uv.fs_stat(child_server))
     end)
+    -- Wait for the TUI to attach (socket may exist before the TUI attaches).
+    screen:expect({ any = vim.pesc('[No Name]') })
   end
 
   it('does not stop server', function()
@@ -2242,6 +2244,16 @@ describe('TUI', function()
     screen:expect([[
       tty ready                                         |
       hallo^                                             |
+                                                        |*2
+      {109:^^^^^^^                                           }|
+      {5:-- TERMINAL --}                                    |*2
+    ]])
+
+    -- Default 'termpastefilter' keeps TAB chars.
+    feed_data('\027[200~\ttab\027[201~')
+    screen:expect([[
+      tty ready                                         |
+      hallo   tab^                                       |
                                                         |*2
       {109:^^^^^^^                                           }|
       {5:-- TERMINAL --}                                    |*2

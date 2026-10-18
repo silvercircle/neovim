@@ -5,13 +5,11 @@
 ---     make doc
 ---
 --- The generated :help text for each function is formatted as follows:
---- - Max width of 78 columns (`TEXT_WIDTH`).
+--- - Max width of 78 columns (`TEXT_WIDTH`), except long function signatures.
 --- - Indent with spaces (not tabs).
 --- - Indent of 4 columns for body text (`INDENTATION`).
---- - Function signature and helptag (right-aligned) on the same line.
----   - Signature and helptag must have a minimum of 8 spaces between them.
----   - If the signature is too long, it is placed on the line after the helptag.
----     Signature wraps with subsequent lines indented to the open parenthesis.
+--- - Function signature and helptag on the same line: helptag right-aligned, or after two spaces if
+---   the signature is too long.
 ---   - Subsection bodies are indented an additional 4 spaces.
 --- - Body consists of function description, parameters, return description, and
 ---   C declaration (`INCLUDE_C_DECL`).
@@ -26,7 +24,6 @@ local lint = require('gen.lint')
 
 local fmt = string.format
 
-local wrap = util.wrap
 local md_to_vimdoc = util.md_to_vimdoc
 local align_tags = util.align_tags
 
@@ -540,6 +537,7 @@ local config = {
 
       local table_rows = { { 'Field', 'Type' } }
       local col1_max_width = 0
+      local col2_max_width = 0
       --- @param defs string[]
       --- @param type string
       --- @param omit_padding_row nil | boolean
@@ -551,6 +549,7 @@ local config = {
         for _, def in ipairs(defs) do
           table.insert(table_rows, { def, type })
           col1_max_width = math.max(col1_max_width, #def)
+          col2_max_width = math.max(col2_max_width, #type)
         end
         if not omit_padding_row then
           table.insert(table_rows, { '', '' })
@@ -565,25 +564,18 @@ local config = {
       add_defs(shifted_keys, 'string[]')
       add_defs(f_keys, 'string', true, true)
 
-      -- Convert all the table rows into strings by calculating the padding
-      -- needed between them
-      local table_str_rows = {}
-      local min_padding = 3 -- padding between table columns
-      local max_width = 0 -- max width of col1 + padding + col2
+      -- Tab-delimited table (see "Tables" in the tree-sitter-vimdoc README), with a separator line
+      -- between groups. Column 2 starts at the first tabstop after the widest column 1.
       local indent = '    '
-      for _, row in ipairs(table_rows) do
-        if #row[1] == 0 then
-          table.insert(table_str_rows, '')
-        else
-          local padding = string.rep(' ', col1_max_width + min_padding - #row[1])
-          local val = table.concat(row, padding)
-          max_width = math.max(max_width, #val)
-          table.insert(table_str_rows, indent .. val)
-        end
+      local col2 = (math.floor((#indent + col1_max_width) / 8) + 1) * 8
+      local sep = indent .. string.rep('-', col2 - #indent + col2_max_width)
+      local table_str_rows = {}
+      for i, row in ipairs(table_rows) do
+        local ntabs = col2 / 8 - math.floor((#indent + #row[1]) / 8)
+        local hdr = i == 1 and ' ~' or ''
+        local val = ('%s%s%s%s%s'):format(indent, row[1], ('\t'):rep(ntabs), row[2], hdr)
+        table.insert(table_str_rows, #row[1] == 0 and sep or val)
       end
-
-      -- Add table header
-      table.insert(table_str_rows, 2, indent .. string.rep('-', max_width))
       return (brief:gsub('NVIM_TERMDEFS_TABLE', table.concat(table_str_rows, '\n')))
     end,
   },
@@ -792,7 +784,12 @@ local function render_class(class, classes, hidden_fields, cfg)
 
   local ret = {} --- @type string[]
 
-  table.insert(ret, fmt('*%s*\n', class.name))
+  -- Plaintext name + helptag, like a function signature. |help-tag-heading|
+  -- Example:
+  --        vim.Diagnostic <whitespace> *vim.Diagnostic*
+  local tag = fmt('*%s*', class.name)
+  local pad = (' '):rep(math.max(2, TEXT_WIDTH - #class.name - #tag))
+  table.insert(ret, fmt('%s%s%s\n', class.name, pad, tag))
 
   if class.parent then
     local txt = fmt('Extends: |%s|', class.parent)
@@ -849,8 +846,6 @@ end
 --- @param fun nvim.luacats.parser.fun
 --- @param cfg nvim.gen_vimdoc.Config
 local function render_fun_header(fun, cfg)
-  local ret = {} --- @type string[]
-
   local args = {} --- @type string[]
   for _, p in ipairs(fun.params or {}) do
     if p.name ~= 'self' then
@@ -873,21 +868,8 @@ local function render_fun_header(fun, cfg)
 
   local tag = '*' .. cfg.fn_helptag_fmt(fun) .. '*'
 
-  if #proto + #tag > TEXT_WIDTH - 8 then
-    table.insert(ret, fmt('%78s\n', tag))
-    local name, pargs = proto:match('([^(]+%()(.*)')
-    if name then
-      table.insert(ret, name)
-      table.insert(ret, wrap(pargs, 0, #name, TEXT_WIDTH))
-    else
-      table.insert(ret, proto)
-    end
-  else
-    local pad = TEXT_WIDTH - #proto - #tag
-    table.insert(ret, proto .. string.rep(' ', pad) .. tag)
-  end
-
-  return table.concat(ret)
+  local pad = math.max(2, TEXT_WIDTH - #proto - #tag)
+  return ('%s%s%s'):format(proto, (' '):rep(pad), tag)
 end
 
 --- @param returns nvim.luacats.parser.return[]

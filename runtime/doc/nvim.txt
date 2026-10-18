@@ -4,6 +4,7 @@
                             NVIM REFERENCE MANUAL
 
 
+==============================================================================
 Nvim                                              *nvim* *neovim* *nvim-intro*
 
 Nvim is based on Vim by Bram Moolenaar. Nvim is emphatically a fork of Vim,
@@ -106,5 +107,4 @@ the same Nvim configuration on all of your machines, by creating
     source ~/.config/nvim/init.vim
 <
 
-==============================================================================
  vim:tw=78:ts=8:et:ft=help:norl:

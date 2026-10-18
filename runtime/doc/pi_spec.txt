@@ -1,5 +1,8 @@
 *pi_spec.txt*   Nvim
 
+==============================================================================
+RPM spec filetype plugin
+
 by Gustavo Niemeyer ~
 
 This is a filetype plugin to work with rpm spec files.
@@ -17,7 +20,7 @@ email address and build a format string by itself.
 ==============================================================================
 1. How to use it				*spec-how-to-use-it*
 
-The spec_chglog plugin provides a map like the following:
+The spec_chglog plugin provides a map like the following: >vim
 
 	:map <buffer> <LocalLeader>c <Plug>SpecChangelog
 

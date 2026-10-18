@@ -4,6 +4,7 @@
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
 
 
+==============================================================================
 Vim client-server communication				*client-server*
 
                                       Type |gO| to see the table of contents.
@@ -17,8 +18,6 @@ Nvim running as a server. These arguments match those provided by Vim's
 clientserver option.
 
 The following command line arguments are available:
-
-    argument			meaning	~
 
    --remote [+{cmd}] {file} ...					*--remote*
 				Open the file list in a remote Vim.  When
@@ -92,8 +91,6 @@ You can not put options there!
 Vim supports additional functionality in clientserver that's not yet
 implemented in Nvim. In particular, none of the "wait" variants are supported
 yet. The following command line arguments are not yet available:
-
-    argument			meaning	~
 
    --remote-wait [+{cmd}] {file} ...				*--remote-wait*
 				Not yet supported by Nvim.

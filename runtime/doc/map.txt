@@ -4,7 +4,8 @@
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
 
 
-Key mapping, abbreviations and user-defined commands.
+==============================================================================
+Key mapping, abbreviations and user-defined commands
 
 This subject is introduced in sections |05.3|, |24.7| and |40.1| of the user
 manual.
@@ -409,12 +410,11 @@ t[nore]map     |  -   |  -  |  -  |  -  |  -  |  -  | yes  |  -   |
 l[nore]map     |  -   | yes | yes |  -  |  -  |  -  |  -   | yes  |
 
 
-    COMMANDS				      MODES ~
-				       Normal  Visual+Select  Operator-pending ~
-:map   :noremap   :unmap   :mapclear	 yes	    yes		   yes
-:nmap  :nnoremap  :nunmap  :nmapclear	 yes	     -		    -
-:vmap  :vnoremap  :vunmap  :vmapclear	  -	    yes		    -
-:omap  :onoremap  :ounmap  :omapclear	  -	     -		   yes
+COMMANDS				Normal	Visual+Select	Op-pending ~
+:map   :noremap   :unmap   :mapclear	yes	yes		yes
+:nmap  :nnoremap  :nunmap  :nmapclear	yes	-		-
+:vmap  :vnoremap  :vunmap  :vmapclear	-	yes		-
+:omap  :onoremap  :ounmap  :omapclear	-	-		yes
 
 :nunmap can also be used outside of a monastery.
 						*mapmode-x* *mapmode-s*
@@ -425,21 +425,19 @@ NOTE: Mapping a printable character in Select mode may confuse the user.  It's
 better to explicitly use :xmap and :smap for printable characters.  Or use
 :sunmap after defining the mapping.
 
-    COMMANDS				      MODES ~
-					  Visual    Select ~
-:vmap  :vnoremap  :vunmap  :vmapclear	    yes      yes
-:xmap  :xnoremap  :xunmap  :xmapclear	    yes       -
-:smap  :snoremap  :sunmap  :smapclear	    -	     yes
+COMMANDS				Visual	Select ~
+:vmap  :vnoremap  :vunmap  :vmapclear	yes	yes
+:xmap  :xnoremap  :xunmap  :xmapclear	yes	-
+:smap  :snoremap  :sunmap  :smapclear	-	yes
 
 			*mapmode-ic* *mapmode-i* *mapmode-c* *mapmode-l*
 Some commands work both in Insert mode and Command-line mode, some not:
 
-    COMMANDS				      MODES ~
-					  Insert  Command-line	Lang-Arg ~
-:map!  :noremap!  :unmap!  :mapclear!	    yes	       yes	   -
-:imap  :inoremap  :iunmap  :imapclear	    yes		-	   -
-:cmap  :cnoremap  :cunmap  :cmapclear	     -	       yes	   -
-:lmap  :lnoremap  :lunmap  :lmapclear	    yes*       yes*	  yes*
+COMMANDS				Insert	Command-line	Lang-Arg ~
+:map!  :noremap!  :unmap!  :mapclear!	yes	yes		-
+:imap  :inoremap  :iunmap  :imapclear	yes	-		-
+:cmap  :cnoremap  :cunmap  :cmapclear	-	yes		-
+:lmap  :lnoremap  :lunmap  :lmapclear	yes*	yes*		yes*
 
 * If 'iminsert' is 1, see |language-mapping| below.
 
@@ -517,6 +515,8 @@ When listing mappings the characters in the first two columns are:
 	t	Terminal-Job
 
 Just before the {rhs} a special character can appear:
+
+	Char	Meaning ~
 	*	indicates that it is not remappable
 	&	indicates that only script-local mappings are remappable
 	@	indicates a buffer-local mapping
@@ -663,6 +663,7 @@ use `|"`, since this starts a new, empty command with a comment.
 Since the '|' character is used to separate a map command from the next
 command, you will have to do something special to include  a '|' in {rhs}.
 There are three methods:
+
    use	     works when			   example	~
    <Bar>     always			   :map _l :!ls <Bar> more^M
    \|	     'b' is not in 'cpoptions'	   :map _l :!ls \| more^M
@@ -868,8 +869,8 @@ you must create a mapping that first sets the 'operatorfunc' option and then
 invoke the |g@| operator.  After the user types the {motion} command the
 specified function will be called.
 
-							*g@* *E774* *E775*
-g@{motion}		Call the function set by the 'operatorfunc' option.
+g@{motion}						*g@* *E774* *E775*
+			Call the function set by the 'operatorfunc' option.
 			The '[ mark is positioned at the start of the text
 			moved over by {motion}, the '] mark on the last
 			character of the text.
@@ -1069,8 +1070,8 @@ Just like mappings, abbreviations can be local to a buffer.  This is mostly
 used in a |filetype-plugin| file.  Example for a C plugin file: >
 	:abb <buffer> FF  for (i = 0; i < ; ++i)
 <
-						*:ab* *:abbreviate*
-:ab[breviate]		list all abbreviations.  The character in the first
+:ab[breviate]						*:ab* *:abbreviate*
+			list all abbreviations.  The character in the first
 			column indicates the mode where the abbreviation is
 			used: 'i' for insert mode, 'c' for Command-line
 			mode, '!' for both.  These are the same as for
@@ -1098,52 +1099,44 @@ See |:verbose-cmd| for more information.
 			See |:map-<expr>| for the optional <expr> argument.
 			See |:map-<buffer>| for the optional <buffer> argument.
 
-						*:una* *:unabbreviate*
-:una[bbreviate] [<buffer>] {lhs}
+:una[bbreviate] [<buffer>] {lhs}			*:una* *:unabbreviate*
 			Remove abbreviation for {lhs} from the list.  If none
 			is found, remove abbreviations in which {lhs} matches
 			with the {rhs}.  This is done so that you can even
 			remove abbreviations after expansion.  To avoid
 			expansion insert a CTRL-V (type it twice).
 
-						*:norea* *:noreabbrev*
-:norea[bbrev] [<expr>] [<buffer>] [lhs] [rhs]
+:norea[bbrev] [<expr>] [<buffer>] [lhs] [rhs]		*:norea* *:noreabbrev*
 			same as ":ab", but no remapping for this {rhs}
 
-						*:ca* *:cab* *:cabbrev*
-:ca[bbrev] [<expr>] [<buffer>] [lhs] [rhs]
+:ca[bbrev] [<expr>] [<buffer>] [lhs] [rhs]		*:ca* *:cab* *:cabbrev*
 			same as ":ab", but for Command-line mode only.
 
-						*:cuna* *:cunabbrev*
-:cuna[bbrev] [<buffer>] {lhs}
+:cuna[bbrev] [<buffer>] {lhs}				*:cuna* *:cunabbrev*
 			Same as ":una", but for Command-line mode only.
 
-						*:cnorea* *:cnoreabbrev*
-:cnorea[bbrev] [<expr>] [<buffer>] [lhs] [rhs]
+:cnorea[bbrev] [<expr>] [<buffer>] [lhs] [rhs]		*:cnorea* *:cnoreabbrev*
 			same as ":ab", but for Command-line mode only and no
 			remapping for this {rhs}
 
-						*:ia* *:iabbrev*
-:ia[bbrev] [<expr>] [<buffer>] [lhs] [rhs]
+:ia[bbrev] [<expr>] [<buffer>] [lhs] [rhs]		*:ia* *:iabbrev*
 			same as ":ab", but for Insert mode only.
 
-						*:iuna* *:iunabbrev*
-:iuna[bbrev] [<buffer>] {lhs}
+:iuna[bbrev] [<buffer>] {lhs}				*:iuna* *:iunabbrev*
 			Same as ":una", but for insert mode only.
 
-						*:inorea* *:inoreabbrev*
-:inorea[bbrev] [<expr>] [<buffer>] [lhs] [rhs]
+:inorea[bbrev] [<expr>] [<buffer>] [lhs] [rhs]		*:inorea* *:inoreabbrev*
 			same as ":ab", but for Insert mode only and no
 			remapping for this {rhs}
 
-							*:abc* *:abclear*
-:abc[lear] [<buffer>]	Remove all abbreviations.
+:abc[lear] [<buffer>]					*:abc* *:abclear*
+			Remove all abbreviations.
 
-							*:iabc* *:iabclear*
-:iabc[lear] [<buffer>]	Remove all abbreviations for Insert mode.
+:iabc[lear] [<buffer>]					*:iabc* *:iabclear*
+			Remove all abbreviations for Insert mode.
 
-							*:cabc* *:cabclear*
-:cabc[lear] [<buffer>]	Remove all abbreviations for Command-line mode.
+:cabc[lear] [<buffer>]					*:cabc* *:cabclear*
+			Remove all abbreviations for Command-line mode.
 
 							*using_CTRL-V*
 It is possible to use special characters in the rhs of an abbreviation.
@@ -1299,14 +1292,13 @@ When 'verbose' is non-zero, listing a command will also display where it was
 last defined and any completion argument.  Example: >
 
     :verbose command TOhtml
-<	Name	    Args Range Complete  Definition ~
-	TOhtml	    0	 %		 :call Convert2HTML(<line1>, <line2>) ~
-	    Last set from /usr/share/vim/vim-7.0/plugin/tohtml.vim ~
-
+	Name	    Args Range Complete  Definition
+	TOhtml	    0	 %		 :call Convert2HTML(<line1>, <line2>)
+	    Last set from /usr/share/vim/vim-7.0/plugin/tohtml.vim
+<
 See |:verbose-cmd| for more information.
 
-							*E174* *E182*
-:com[mand][!] [{attr}...] {cmd} {repl}
+:com[mand][!] [{attr}...] {cmd} {repl}			*E174* *E182*
 			Define a user command.  The name of the command is
 			{cmd} and its replacement text is {repl}.  The
 			command's attributes (see below) are {attr}.  If the

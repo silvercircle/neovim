@@ -1,5 +1,7 @@
 *pi_tutor.txt* Interactive tutorials.
-*vim-tutor-mode*
+
+==============================================================================
+Interactive tutorials					*vim-tutor-mode*
 
 vim-tutor-mode provides a system to follow and create interactive tutorials
 for vim and third party plugins. It replaces the venerable `vimtutor` system.
@@ -14,8 +16,7 @@ contain links. To stand out from the rest of the text, links are underlined.
 You can follow them by placing the cursor over them and pressing <Enter>, or
 by double-clicking them.
 
-1.1 Commands
-------------
+1.1 COMMANDS
 								      *:Tutor*
 :Tutor {tutorial}	Opens a tutorial. Command-line completion for
 			{tutorial} is provided, the candidates are a list of
@@ -41,5 +42,4 @@ to be detected by the :Tutor command.
 It is recommended to use a less formal style when writing tutorials than in
 regular documentation (unless the content requires it).
 
-=============================================================================
   vim:tw=78:ts=8:noet:ft=help:norl:

@@ -4,6 +4,7 @@
 		  NVIM REFERENCE MANUAL
 
 
+==============================================================================
 The Python Interface to NVim				*if_pyth* *python* *Python*
 
 See |provider-python| for more information.
@@ -13,8 +14,7 @@ See |provider-python| for more information.
 ==============================================================================
 Commands						*python-commands*
 
-					*:python* *:py* *E263* *E264* *E887*
-:[range]py[thon] {stmt}
+:[range]py[thon] {stmt}			*:python* *:py* *E263* *E264* *E887*
 			Execute Python statement {stmt}.  A simple check if
 			the `:python` command is working: >vim
 				:python print("Hello")
@@ -52,8 +52,8 @@ https://docs.python.org/3/library/os.html#os.environ
 Note: Python is very sensitive to indenting.  Make sure the "class" line and
 "EOF" do not have any indent.
 
-							*:pydo*
-:[range]pydo {body}	Execute Python function "def _vim_pydo(line, linenr):
+:[range]pydo {body}					*:pydo*
+			Execute Python function "def _vim_pydo(line, linenr):
 			{body}" for each line in the [range], with the
 			function arguments being set to the text of each line
 			in turn, without a trailing <EOL>, and the current
@@ -79,8 +79,7 @@ python.  For example: >vim
 	EOF
 	:'<,'>py3do return py_vim_string_replace(line)
 <
-							*:pyfile* *:pyf*
-:[range]pyf[ile] {file}
+:[range]pyf[ile] {file}					*:pyfile* *:pyf*
 			Execute the Python script in {file}.  The whole
 			argument is used as a single file name.
 
@@ -246,6 +245,8 @@ vim.tabpages						*python-tabpages*
 vim.current						*python-current*
 	An object providing access (via specific attributes) to various
 	"current" objects available in vim:
+
+		Object			Description			Type ~
 		vim.current.line	The current line (RW)		String
 		vim.current.buffer	The current buffer (RW)		Buffer
 		vim.current.window	The current window (RW)		Window
@@ -417,6 +418,8 @@ line numbers, which start from 1.  This is particularly relevant when dealing
 with marks (see below) which use vim line numbers.
 
 The buffer object attributes are:
+
+	Attribute	Description ~
 	b.vars		Dictionary-like object used to access
 			|buffer-variable|s.
 	b.options	Mapping object (supports item getting, setting and
@@ -483,6 +486,8 @@ can, of course, change as a result of slice assignments, line deletions, or
 the range.append() method).
 
 The range object attributes are:
+
+	Attribute	Description ~
 	r.start		Index of first line into the buffer
 	r.end		Index of last line into the buffer
 
@@ -515,6 +520,8 @@ You can manipulate window objects only through their attributes.  They have no
 methods, and no sequence or other interface.
 
 Window attributes are:
+
+	Attribute		Description ~
 	buffer (read-only)	The buffer displayed in this window
 	cursor (read-write)	The current cursor position in the window
 				This is a tuple, (row,col).
@@ -558,6 +565,8 @@ You can use this object to access tab page windows. They have no methods and
 no sequence or other interfaces.
 
 Tab page attributes are:
+
+	Attribute	Description ~
 	number		The tab page number like the one returned by
 			|tabpagenr()|.
 	windows		Like |python-windows|, but for current tab page.
@@ -583,13 +592,12 @@ with "python3" in the current version. However, code that aims to support older
 versions of Nvim, as well as Vim, should prefer to use "python3" variants
 explicitly if Python 3 is required.
 
-							*:py3* *:python3*
-:[range]py3 {stmt}
+:[range]py3 {stmt}					*:py3*
 :[range]py3 << [trim] [{endmarker}]
 {script}
 {endmarker}
 
-:[range]python3 {stmt}
+:[range]python3 {stmt}					*:python3*
 :[range]python3 << [trim] [{endmarker}]
 {script}
 {endmarker}
@@ -600,8 +608,8 @@ explicitly if Python 3 is required.
 	To see what version of Python you have: >vim
 		:py3 import sys
 		:py3 print(sys.version)
-<							*:py3file*
-:[range]py3f[ile] {file}
+<
+:[range]py3f[ile] {file}				*:py3file*
 	The `:py3file` command works similar to `:pyfile`.
 							*:py3do*
 :[range]py3do {body}

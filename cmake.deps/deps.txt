@@ -2,8 +2,8 @@
 LIBUV_URL https://github.com/libuv/libuv/archive/v1.52.1.tar.gz
 LIBUV_SHA256 478baf2599bfbc882c355288c9cb6f92e0e7dda435fa04031fa5b607cf3f414c
 
-LUAJIT_URL https://github.com/luajit/luajit/archive/24c20c94e7db195b640854619577441f9b4bc6be.tar.gz
-LUAJIT_SHA256 178c656b62bb796e536a23f1d3bb09e1824e4dd28eaf2a4758b295ac328e32e6
+LUAJIT_URL https://github.com/luajit/luajit/archive/2a8e017ef1ece6a95b983ffca073d30609dce7c4.tar.gz
+LUAJIT_SHA256 54705d4b1de50a9c668539b9cf0dc3170d94ffdad51fafd1cf4477e498be7144
 
 LUA_URL https://www.lua.org/ftp/lua-5.1.5.tar.gz
 LUA_SHA256 2640fc56a795f29d28ef15e13c34a47e223960b0240e8cb0a82d9b0738695333
@@ -40,8 +40,8 @@ TREESITTER_LUA_WASM_URL https://github.com/tree-sitter-grammars/tree-sitter-lua/
 TREESITTER_LUA_WASM_SHA256 df08a1704e504c70b8dba4a3e6f8e0c99a4fb94e1b1693d2969f53141d09f0d4
 TREESITTER_VIM_URL https://github.com/tree-sitter-grammars/tree-sitter-vim/archive/v0.8.1.tar.gz
 TREESITTER_VIM_SHA256 93cafb9a0269420362454ace725a118ff1c3e08dcdfdc228aa86334b54d53c2a
-TREESITTER_VIMDOC_URL https://github.com/neovim/tree-sitter-vimdoc/archive/v4.1.0.tar.gz
-TREESITTER_VIMDOC_SHA256 020e8f117f648c8697fca967995c342e92dbd81dab137a115cc7555207fbc84f
+TREESITTER_VIMDOC_URL https://github.com/neovim/tree-sitter-vimdoc/archive/v4.3.0.tar.gz
+TREESITTER_VIMDOC_SHA256 4c46119abf86fcb29bc66878eb9a37666a936589769bea2b76308cd2119dfaf5
 TREESITTER_QUERY_URL https://github.com/tree-sitter-grammars/tree-sitter-query/archive/v0.8.0.tar.gz
 TREESITTER_QUERY_SHA256 c2b23b9a54cffcc999ded4a5d3949daf338bebb7945dece229f832332e6e6a7d
 TREESITTER_MARKDOWN_URL https://github.com/tree-sitter-grammars/tree-sitter-markdown/archive/v0.5.3.tar.gz

@@ -5,7 +5,7 @@
 --- @field alias? string|string[]
 --- Defaults to 'did_set_str_generic' when `flags_varname` is present.
 --- @field cb? string Applies the stored value and updates derived state.
---- @field validation_cb? string Checks a candidate value without side effects.
+--- @field validation_cb? string Checks a candidate and may prepare data without side effects.
 --- @field defaults? vim.option_defaults|vim.option_value|fun(): string
 --- @field deny_duplicates? boolean
 --- @field desc? string
@@ -445,6 +445,7 @@ local options = {
         Influences the working of <BS>, <Del>, CTRL-W and CTRL-U in Insert
         mode.  This is a list of items, separated by commas.  Each item allows
         a way to backspace over something:
+
         value	effect	~
         indent	allow backspacing over autoindent
         eol	allow backspacing over line breaks (join lines)
@@ -498,11 +499,15 @@ local options = {
         done.  This is a comma-separated list of words.
 
         The main values are:
+
+        Value	Meaning ~
         "yes"	make a copy of the file and overwrite the original one
         "no"	rename the file and write a new one
         "auto"	one of the previous, what works best
 
         Extra values that can be combined with the ones above are:
+
+        Value		Meaning ~
         "breaksymlink"	always break symlinks when writing
         "breakhardlink"	always break hardlinks when writing
 
@@ -600,6 +605,7 @@ local options = {
           get one in the option (see |option-backslash|), for example: >vim
             set bdir=c:\\tmp,\ dir\\,with\\,commas,\\\ dir\ with\ spaces
         <
+
         See also 'backup' and 'writebackup' options.
         If you want to hide your backup files on Unix, consider this value: >vim
         	set backupdir=./.backup,~/.backup,.,/tmp
@@ -719,31 +725,31 @@ local options = {
         mode to be silenced.
         You can also make it flash by using 'visualbell'.
 
-        item	    meaning when present	~
-        all	    All events.
-        backspace   When hitting <BS> or <Del> and deleting results in an
-        	    error.
-        cursor	    Fail to move around using the cursor keys or
-        	    <PageUp>/<PageDown> in |Insert-mode|.
-        complete    Error occurred when using |i_CTRL-X_CTRL-K| or
-        	    |i_CTRL-X_CTRL-T|.
-        copy	    Cannot copy char from insert mode using |i_CTRL-Y| or
-        	    |i_CTRL-E|.
-        ctrlg	    Unknown Char after <C-G> in Insert mode.
-        error	    Other Error occurred (e.g. try to join last line)
-        	    (mostly used in |Normal-mode| or |Cmdline-mode|).
-        esc	    hitting <Esc> in |Normal-mode|.
-        hangul	    Ignored.
-        lang	    Calling the beep module for Lua/Mzscheme/TCL.
-        mess	    No output available for |g<|.
-        showmatch   Error occurred for 'showmatch' function.
-        operator    Empty region error |cpo-E|.
-        register    Unknown register after <C-R> in |Insert-mode|.
-        shell	    Bell from shell output |:!|.
-        spell	    Error happened on spell suggest.
-        term	    Bell from |:terminal| output.
-        wildmode    More matches in |cmdline-completion| available
-        	    (depends on the 'wildmode' setting).
+        item		meaning when present ~
+        all		All events.
+        backspace	When hitting <BS> or <Del> and deleting results in an
+        		error.
+        cursor		Fail to move around using the cursor keys or
+        		<PageUp>/<PageDown> in |Insert-mode|.
+        complete	Error occurred when using |i_CTRL-X_CTRL-K| or
+        		|i_CTRL-X_CTRL-T|.
+        copy		Cannot copy char from insert mode using |i_CTRL-Y| or
+        		|i_CTRL-E|.
+        ctrlg		Unknown Char after <C-G> in Insert mode.
+        error		Other Error occurred (e.g. try to join last line)
+        		(mostly used in |Normal-mode| or |Cmdline-mode|).
+        esc		hitting <Esc> in |Normal-mode|.
+        hangul		Ignored.
+        lang		Calling the beep module for Lua/Mzscheme/TCL.
+        mess		No output available for |g<|.
+        showmatch	Error occurred for 'showmatch' function.
+        operator	Empty region error |cpo-E|.
+        register	Unknown register after <C-R> in |Insert-mode|.
+        shell		Bell from shell output |:!|.
+        spell		Error happened on spell suggest.
+        term		Bell from |:terminal| output.
+        wildmode	More matches in |cmdline-completion| available
+        		(depends on the 'wildmode' setting).
 
         This is most useful to fine tune when in Insert mode the bell should
         be rung.  For Normal mode and Ex commands, the bell is often rung to
@@ -1151,6 +1157,7 @@ local options = {
     },
     {
       cb = 'did_set_cedit',
+      validation_cb = 'validate_cedit',
       defaults = {
         if_true = macros('CTRL_F_STR', 'string'),
         doc = 'CTRL-F',
@@ -1630,6 +1637,7 @@ local options = {
     {
       abbreviation = 'cia',
       cb = 'did_set_completeitemalign',
+      validation_cb = 'validate_completeitemalign',
       defaults = 'abbr,kind,menu',
       deny_duplicates = true,
       desc = [=[
@@ -1917,7 +1925,7 @@ local options = {
         To avoid problems with flags that are added in the future, use the
         "+=" and "-=" feature of ":set" |add-option-flags|.
 
-            contains	behavior	~
+            contains    behavior        ~
         							*cpo-a*
         	a	When included, a ":read" command with a file name
         		argument will set the alternate file name for the
@@ -2247,6 +2255,7 @@ local options = {
       desc = [=[
         Highlighting used for the line the cursor is on:
 
+        Group			Highlights ~
         CursorLine		the text line |hl-CursorLine|
         CursorLineFold		the fold column |hl-CursorLineFold|
         CursorLineSign		the sign column |hl-CursorLineSign|
@@ -2266,6 +2275,7 @@ local options = {
     {
       abbreviation = 'culopt',
       cb = 'did_set_cursorlineopt',
+      validation_cb = 'validate_cursorlineopt',
       defaults = 'both',
       -- Keep this in sync with fill_culopt_flags(). "both" is an alias (line+number), not its own bit.
       schema = {
@@ -2698,6 +2708,7 @@ local options = {
           get one in the option (see |option-backslash|), for example: >vim
             set dir=c:\\tmp,\ dir\\,with\\,commas,\\\ dir\ with\ spaces
         <
+
         Editing the same file twice will result in a warning.  Using "/tmp" on
         is discouraged: if the system crashes you lose the swap file. And
         others on the computer may be able to see the files.
@@ -2802,6 +2813,7 @@ local options = {
     {
       abbreviation = 'enc',
       cb = 'did_set_encoding',
+      validation_cb = 'validate_encoding',
       defaults = macros('ENC_DFLT', 'string'),
       desc = [=[
         String-encoding used internally and for |RPC| communication.
@@ -3056,6 +3068,7 @@ local options = {
     {
       abbreviation = 'fenc',
       cb = 'did_set_encoding',
+      validation_cb = 'validate_encoding',
       defaults = '',
       desc = [=[
         File-content encoding for the current buffer. Conversion is done with
@@ -3413,6 +3426,7 @@ local options = {
         double-width characters are not supported. |E1512|
 
         The highlighting used for these items:
+
           item		highlight group ~
           stl		StatusLine		|hl-StatusLine|
           stlnc		StatusLineNC		|hl-StatusLineNC|
@@ -3802,6 +3816,7 @@ local options = {
         			Also for |[s| and |]s|.
         	tag		jumping to a tag: ":ta", CTRL-T, etc.
         	undo		undo or redo: "u" and CTRL-R
+
         When a movement command is used for an operator (e.g., "dl" or "y%")
         this option is not used.  This means the operator will include the
         whole closed fold.
@@ -4783,6 +4798,8 @@ local options = {
         type.
 
         Possible values:
+
+        	Value	Meaning ~
         	nosplit	Shows the effects of a command incrementally in the
         		buffer.
         	split	Like "nosplit", but also shows partial off-screen
@@ -5777,6 +5794,7 @@ local options = {
     {
       abbreviation = 'menc',
       cb = 'did_set_encoding',
+      validation_cb = 'validate_encoding',
       defaults = '',
       desc = [=[
         Encoding used for reading the output of external commands.  When
@@ -5970,6 +5988,7 @@ local options = {
     {
       abbreviation = 'mopt',
       cb = 'did_set_messagesopt',
+      validation_cb = 'validate_messagesopt',
       defaults = 'hit-enter,history:500,progress:c',
       schema = {
         dict = {
@@ -6203,6 +6222,8 @@ local options = {
         the mouse.
 
         Mouse support can be enabled for different modes:
+
+        	Flag	Mode ~
         	n	Normal mode
         	v	Visual mode
         	i	Insert mode
@@ -6227,6 +6248,8 @@ local options = {
         "* register if possible. See also 'clipboard'.
 
         Related options:
+
+        Option		Description ~
         'mousefocus'	window focus follows mouse pointer
         'mousemodel'	what mouse button does which action
         'mousehide'	hide mouse pointer while typing text
@@ -6806,7 +6829,9 @@ local options = {
         	set path=.,c:\\include
         <	  Or just use '/' instead: >vim
         	set path=.,c:/include
-        <	Don't forget "." or files won't even be found in the same directory as
+        <
+
+        Don't forget "." or files won't even be found in the same directory as
         the file!
         The maximum length is limited.  How much depends on the system, mostly
         it is something like 256 or 1024 characters.
@@ -7692,10 +7717,12 @@ local options = {
         This option defines the behavior of the selection.  It is only used
         in Visual and Select mode.
         Possible values:
-           value	past line     inclusive ~
+
+           value		past line	inclusive ~
            old		   no		yes
            inclusive	   yes		yes
            exclusive	   yes		no
+
         "past line" means that the cursor is allowed to be positioned one
         character past the line.
         "inclusive" means that the last character of the selection is included
@@ -7776,6 +7803,7 @@ local options = {
         Changes the effect of the |:mksession| command.  It is a comma-
         separated list of words.  Each word enables saving and restoring
         something:
+
            word		save and restore ~
            blank	empty windows
            buffers	hidden and unloaded buffers, not just those in windows
@@ -7834,6 +7862,7 @@ local options = {
         character is left out, then the default value is used for that
         parameter.  The following is a list of the identifying characters and
         the effect of their value.
+
         CHAR	VALUE	~
         						*shada-!*
         !	When included, save and restore global variables that start
@@ -8007,6 +8036,7 @@ local options = {
            'a"b', '"a\b"' is the same as "a\b" again.
         4. Outside of quotes backslash always means itself, it cannot be used
            to escape quote: 'a\"b"' is the same as "a\b".
+
         Note that such processing is done after |:set| did its own round of
         unescaping, so to keep yourself sane use |:let-&| like shown above.
         						*shell-powershell*
@@ -8301,44 +8331,45 @@ local options = {
         messages.
 
         It is a list of flags:
-         flag	meaning when present	~
-          l	use "999L, 888B" instead of "999 lines, 888 bytes"	*shm-l*
-          m	use "[+]" instead of "[Modified]"			*shm-m*
-          r	use "[RO]" instead of "[readonly]"			*shm-r*
-          w	use "[w]" instead of "written" for file write message	*shm-w*
-        	and "[a]" instead of "appended" for ':w >> file' command
-          a	all of the above abbreviations				*shm-a*
 
-          o	overwrite message for writing a file with subsequent	*shm-o*
+         flag	meaning when present	~
+          l	use "999L, 888B" instead of "999 lines, 888 bytes"      *shm-l*
+          m	use "[+]" instead of "[Modified]"                       *shm-m*
+          r	use "[RO]" instead of "[readonly]"                      *shm-r*
+          w	use "[w]" instead of "written" for file write message   *shm-w*
+        	and "[a]" instead of "appended" for ':w >> file' command
+          a	all of the above abbreviations                          *shm-a*
+        ----------------------------------------------------------------------
+          o	overwrite message for writing a file with subsequent    *shm-o*
         	message for reading a file (useful for ":wn" or when
         	'autowrite' on)
-          O	message for reading a file overwrites any previous	*shm-O*
+          O	message for reading a file overwrites any previous      *shm-O*
         	message;  also for quickfix message (e.g., ":cn")
-          s	don't give "search hit BOTTOM, continuing at TOP" or	*shm-s*
+          s	don't give "search hit BOTTOM, continuing at TOP" or    *shm-s*
         	"search hit TOP, continuing at BOTTOM" messages; when using
         	the search count do not show "W" before the count message
         	(see |shm-S| below)
-          t	truncate file message at the start if it is too long	*shm-t*
+          t	truncate file message at the start if it is too long    *shm-t*
         	to fit on the command-line, "<" will appear in the left most
         	column; ignored in Ex mode
-          T	truncate other messages in the middle if they are too	*shm-T*
+          T	truncate other messages in the middle if they are too   *shm-T*
         	long to fit on the command line; "..." will appear in the
         	middle; ignored in Ex mode
-          W	don't give "written" or "[w]" when writing a file	*shm-W*
-          A	don't give the "ATTENTION" message when an existing	*shm-A*
+          W	don't give "written" or "[w]" when writing a file       *shm-W*
+          A	don't give the "ATTENTION" message when an existing     *shm-A*
         	swap file is found
-          I	don't give the intro message when starting Vim,		*shm-I*
+          I	don't give the intro message when starting Vim,         *shm-I*
         	see |:intro|
-          c	don't give |ins-completion-menu| messages; for		*shm-c*
+          c	don't give |ins-completion-menu| messages; for          *shm-c*
         	example, "-- XXX completion (YYY)", "match 1 of 2", "The only
         	match", "Pattern not found", "Back at original", etc.
-          C	don't give messages while scanning for ins-completion	*shm-C*
+          C	don't give messages while scanning for ins-completion   *shm-C*
         	items, for instance "scanning tags"
-          q	do not show "recording @a" when recording a macro	*shm-q*
-          F	don't give the file info when editing a file, like	*shm-F*
+          q	do not show "recording @a" when recording a macro       *shm-q*
+          F	don't give the file info when editing a file, like      *shm-F*
         	`:silent` was used for the command; note that this also
         	affects messages from 'autoread' reloading
-          S	do not show search count message when searching, e.g.	*shm-S*
+          S	do not show search count message when searching, e.g.   *shm-S*
         	"[1/5]".  When the "S" flag is not present (e.g. search count
         	is shown), the "search hit BOTTOM, continuing at TOP" and
         	"search hit TOP, continuing at BOTTOM" messages are only
@@ -8346,7 +8377,7 @@ local options = {
         	search count statistics.  The maximum limit can be set with
         	the 'maxsearchcount' option, see also |searchcount()|
         	function.
-          u	don't give undo and redo messages like			*shm-u*
+          u	don't give undo and redo messages like                  *shm-u*
         	"1 line less; before #1  1 second ago", "Already at oldest
         	change" or "Already at newest change"
 
@@ -8779,6 +8810,7 @@ local options = {
     {
       abbreviation = 'spc',
       cb = 'did_set_spellcapcheck',
+      validation_cb = 'validate_spellcapcheck',
       defaults = '[.?!]\\_[\\])\'"\\t ]\\+',
       desc = [=[
         Pattern to locate the end of a sentence.  The following word will be
@@ -8918,6 +8950,7 @@ local options = {
     {
       abbreviation = 'sps',
       cb = 'did_set_spellsuggest',
+      validation_cb = 'validate_spellsuggest',
       defaults = 'best',
       -- Keep this in sync with spell_check_sps().
       schema = {
@@ -8957,9 +8990,9 @@ local options = {
         file:{filename} Read file {filename}, which must have two columns,
         		separated by a slash.  The first column contains the
         		bad word, the second column the suggested good word.
-        		Example:
-        			theribal/terrible ~
-        		Use this for common mistakes that do not appear at the
+        		Example: >
+        			theribal/terrible
+        <			Use this for common mistakes that do not appear at the
         		top of the suggestion list with the internal methods.
         		Lines without a slash are ignored, use this for
         		comments.
@@ -8975,9 +9008,9 @@ local options = {
         		|v:val| holds the badly spelled word.  The expression
         		must evaluate to a List of Lists, each with a
         		suggestion and a score.
-        		Example:
-        			[['the', 33], ['that', 44]] ~
-        		Set 'verbose' and use |z=| to see the scores that the
+        		Example: >
+        			[['the', 33], ['that', 44]]
+        <			Set 'verbose' and use |z=| to see the scores that the
         		internal methods use.  A lower score is better.
         		This may invoke |spellsuggest()| if you temporarily
         		set 'spellsuggest' to exclude the "expr:" part.
@@ -9025,6 +9058,8 @@ local options = {
         closing or resizing horizontal splits.
 
         Possible values are:
+
+          Value		Meaning ~
           cursor	Keep the same relative cursor position.
           screen	Keep the text on the same screen line.
           topline	Keep the topline the same.
@@ -9089,6 +9124,7 @@ local options = {
         Some of the items from the 'statusline' format are different for
         'statuscolumn':
 
+        Item	Meaning ~
         %l	line number column for currently drawn line
         %s	sign column for currently drawn line
         %C	fold column for currently drawn line
@@ -9190,7 +9226,7 @@ local options = {
         is 2 or 3) is controlling the output of |CTRL-G|.
 
         field	    meaning ~
-        -	    Left justify the item.  The default is right justified
+        `-`	    Left justify the item.  The default is right justified
         	    when minwid is larger than the length of the item.
         0	    Leading zeroes in numeric items.  Overridden by "-".
         minwid	    Minimum width of the item, padding as set by "-" & "0".
@@ -9591,6 +9627,8 @@ local options = {
         |:tabclose|).  When empty Vim goes to the next (right) tabpage.
 
         Possible values (comma-separated list):
+
+           Value	Meaning ~
            left		If included, go to the previous tabpage instead of
         		the next one.
            uselast	If included, go to the previously used tabpage if
@@ -9899,7 +9937,7 @@ local options = {
     {
       abbreviation = 'tpf',
       validation_cb = 'validate_str_generic',
-      defaults = 'BS,HT,ESC,DEL',
+      defaults = 'BS,ESC,DEL',
       schema = {
         flags = { 'BS', 'HT', 'FF', 'ESC', 'DEL', 'C0', 'C1' },
       },
@@ -10360,7 +10398,8 @@ local options = {
     },
     {
       abbreviation = 'vsts',
-      cb = 'did_set_varsofttabstop',
+      cb = 'did_set_vartabstop',
+      validation_cb = 'validate_vartabstop',
       defaults = '',
       desc = [=[
         Defines variable-width soft tab stops.  The value is a comma-separated
@@ -10388,6 +10427,7 @@ local options = {
     {
       abbreviation = 'vts',
       cb = 'did_set_vartabstop',
+      validation_cb = 'validate_vartabstop',
       defaults = '',
       desc = [=[
         Defines variable-width tab stops.  The value is a comma-separated list
@@ -10426,8 +10466,7 @@ local options = {
         If greater than or equal to a given level, Nvim produces the following
         messages:
 
-        Level   Messages ~
-        ----------------------------------------------------------------------
+        Level	Messages ~
         1	Enables Lua tracing (see above). Does not produce messages.
         2	When a file is ":source"'ed, or |shada| file is read or written.
         3	UI info, terminal capabilities.
@@ -10497,6 +10536,7 @@ local options = {
       desc = [=[
         Changes the effect of the |:mkview| command.  It is a comma-separated
         list of words.  Each word enables saving and restoring something:
+
            word		save and restore ~
            cursor	cursor position in file and in window
            curdir	local current directory, if set with |:lcd|
@@ -10505,7 +10545,7 @@ local options = {
            options	options and mappings local to a window or buffer (not
                         global values for local options), except Lua functions
         		|option-value-function|.
-           localoptions same as "options"
+           localoptions	same as "options"
            slash	|deprecated| Always enabled. Uses "/" in filenames.
            unix		|deprecated| Always enabled. Uses "\n" line endings.
       ]=],
@@ -10603,6 +10643,7 @@ local options = {
         Allow specified keys that move the cursor left/right to move to the
         previous/next line when the cursor is on the first/last character in
         the line.  Concatenate characters to allow this for these keys:
+
         	char   key	  mode	~
         	 b    <BS>	 Normal and Visual
         	 s    <Space>	 Normal and Visual
@@ -10613,6 +10654,7 @@ local options = {
         	 ~    "~"	 Normal
         	 [    <Left>	 Insert and Replace
         	 ]    <Right>	 Insert and Replace
+
         For example: >vim
         	set ww=<,>,[,]
         <	allows wrap only when cursor keys are used.
@@ -10780,6 +10822,7 @@ local options = {
     {
       abbreviation = 'wim',
       cb = 'did_set_wildmode',
+      validation_cb = 'validate_wildmode',
       defaults = 'full',
       -- Keep this in sync with check_opt_wim().
       schema = {
@@ -10817,6 +10860,8 @@ local options = {
         "noinsert" is specified.
 
         Some useful combinations of colon-separated values:
+
+        Value			Meaning ~
         "longest:full"		Start with the longest common string and show
         			'wildmenu' (if enabled).  Does not cycle
         			through full matches.

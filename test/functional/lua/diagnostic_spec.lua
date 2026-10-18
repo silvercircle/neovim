@@ -1383,6 +1383,36 @@ describe('vim.diagnostic', function()
       )
     end)
 
+    for _, case in ipairs({
+      { edit = 'insert', count = 2, start = { 1, 0 }, expected = { 5, 1 } },
+      { edit = 'delete', count = -2, start = { 5, 0 }, expected = { 1, 1 } },
+    }) do
+      it('uses logical positions for counted jumps after ' .. case.edit, function()
+        exec_lua(function(edit)
+          vim.diagnostic.set(_G.diagnostic_ns, 0, {
+            _G.make_error('First diagnostic', 1, 1, 1, 3),
+            _G.make_error('Second diagnostic', 3, 1, 3, 3),
+          })
+          if edit == 'insert' then
+            vim.api.nvim_buf_set_lines(0, 0, 0, false, { 'new line' })
+          else
+            vim.api.nvim_buf_set_lines(0, 0, 1, false, {})
+          end
+        end, case.edit)
+
+        local function jump(count)
+          return exec_lua(function(start, count0)
+            vim.api.nvim_win_set_cursor(0, start)
+            vim.diagnostic.jump({ count = count0, wrap = false })
+            return vim.api.nvim_win_get_cursor(0)
+          end, case.start, count)
+        end
+
+        eq(case.expected, jump(case.count))
+        eq(case.expected, jump(case.count > 0 and math.huge or -math.huge))
+      end)
+    end
+
     it('can filter by severity', function()
       eq(
         { 3, 0 },
@@ -2385,6 +2415,40 @@ describe('vim.diagnostic', function()
       eq(1, #result)
       eq('auto', result[1][4].virt_lines_overflow)
       eq('miss-symbol: Missed symbol `,`', result[1][4].virt_lines[1][3][1])
+    end)
+
+    it('can show diagnostic sources in virtual lines', function()
+      local result = exec_lua(function()
+        vim.diagnostic.config({ virtual_lines = { source = 'always' } })
+
+        vim.diagnostic.set(_G.diagnostic_ns, _G.diagnostic_bufnr, {
+          _G.make_error('Some error', 0, 0, 0, 0, 'source x'),
+        })
+
+        local extmarks = _G.get_virt_lines_extmarks(_G.diagnostic_ns)
+        return extmarks[1][4].virt_lines[1][3][1]
+      end)
+      eq('source x: Some error', result)
+
+      result = exec_lua(function()
+        vim.diagnostic.config({ virtual_lines = { source = 'if_many' } }, _G.diagnostic_ns)
+
+        local extmarks = _G.get_virt_lines_extmarks(_G.diagnostic_ns)
+        return extmarks[1][4].virt_lines[1][3][1]
+      end)
+      eq('Some error', result)
+
+      result = exec_lua(function()
+        vim.diagnostic.set(_G.diagnostic_ns, _G.diagnostic_bufnr, {
+          _G.make_error('Some error', 0, 0, 0, 0, 'source x'),
+          _G.make_error('Another error', 1, 1, 1, 1, 'source y'),
+        })
+
+        local extmarks = _G.get_virt_lines_extmarks(_G.diagnostic_ns)
+        return { extmarks[1][4].virt_lines[1][3][1], extmarks[2][4].virt_lines[1][3][1] }
+      end)
+      eq('source x: Some error', result[1])
+      eq('source y: Another error', result[2])
     end)
 
     it('adds space to the left of the diagnostic', function()
