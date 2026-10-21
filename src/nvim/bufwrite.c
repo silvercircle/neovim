@@ -67,9 +67,6 @@ static const char e_write_error_file_system_full[]
 static const char e_no_matching_autocommands_for_buftype_str_buffer[]
   = N_("E676: No matching autocommands for buftype=%s buffer");
 
-/// If :write is slower than this, emit a progress-message.
-static const uint64_t slow_write_ns = NS_PER_SEC / 2;
-
 typedef struct {
   const char *num;
   char *msg;
@@ -1097,16 +1094,13 @@ int buf_write(buf_T *buf, char *fname, char *sfname, linenr_T start, linenr_T en
   } else {
     msg_scroll = true;              // don't overwrite previous file message
   }
-  // Progress-msg id, e.g. `nvim.bufwrite "foo.txt"`.
-  char msg_id[MAXPATHL + 32];
 #ifndef UNIX
   char *msgname = sfname;
 #else
   char *msgname = fname;
 #endif
-  size_t id_len = xstrlcpy(msg_id, "nvim.bufwrite ", sizeof(msg_id));
-  add_quoted_fname(msg_id + id_len, sizeof(msg_id) - id_len, buf, msgname);
-  msg_id[strlen(msg_id) - 1] = NUL;  // add_quoted_fname() appends a space, for display only.
+  char msg_id[MAXPATHL + 32];  // Progress-msg id.
+  fname_msg_id(msg_id, sizeof(msg_id), "nvim.bufwrite", buf, msgname);
 
   // Hide the cursor until done writing, else it jumps to the filename message. #25974
   const bool show_msg = !filtering && msg_silent == 0;
@@ -1120,6 +1114,8 @@ int buf_write(buf_T *buf, char *fname, char *sfname, linenr_T start, linenr_T en
   int progress = -1;  // Progress-message percent for a slow write.
   off_T progress_nchars = 0;  // `nchars` at the last progress check.
   const uint64_t write_start = os_hrtime();
+  // Safety: any changes hereafter (eg by Progress autocmds) are not written, so keep 'modified'.
+  const varnumber_T write_tick = buf_get_changedtick(buf);
   msg_scroll = false;               // always overwrite the file message now
 
   char *buffer = verbose_try_malloc(WRITEBUFSIZE);
@@ -1541,10 +1537,16 @@ restore_backup:
       if (show_msg && nchars != progress_nchars) {
         progress_nchars = nchars;
         const int percent = (int)((int64_t)(lnum - start) * 100 / (end - start + 1));
-        if (percent != progress && (progress >= 0 || os_hrtime() - write_start > slow_write_ns)) {
+        if (percent != progress && (progress >= 0 || os_hrtime() - write_start > slow_io_ns())) {
           progress = percent;
           add_quoted_fname(IObuff, IOSIZE, buf, msgname);
           msg_progress(IObuff, msg_id, "running", progress, 0, false, true, false);
+          if (buf_get_changedtick(buf) != write_tick) {
+            // Progress handler changed the text: the file would mix old and new lines.
+            err = set_err(_(e_buffer_changed_unexpectedly));
+            end = 0;
+            break;
+          }
         }
       }
     }
@@ -1759,11 +1761,12 @@ restore_backup:
                  : msg_with_id(IObuff, msg_id, "bufwrite", NULL, 0, true, true, false), 0);
   }
 
-  // When written everything correctly: reset 'modified'.  Unless not
-  // writing to the original file and '+' is not in 'cpoptions'.
+  // When written everything correctly: reset 'modified'.  Unless not writing to the original file
+  // and not 'cpoptions=+', or the buffer changed (by autocmds!?) while writing.
   if (reset_changed && whole && !append
       && !write_info.bw_conv_error
-      && (overwriting || vim_strchr(p_cpo, kCpoPlus) != NULL)) {
+      && (overwriting || vim_strchr(p_cpo, kCpoPlus) != NULL)
+      && buf_get_changedtick(buf) == write_tick) {
     unchanged(buf, true, false);
     const varnumber_T changedtick = buf_get_changedtick(buf);
     if (buf->b_last_changedtick + 1 == changedtick) {

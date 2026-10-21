@@ -3934,50 +3934,92 @@ describe('progress-message', function()
     })
   end)
 
-  it('emitted by slow :write, but not :read #41193 #41713', function()
-    t.skip(t.is_os('win'), 'N/A for Windows') -- Using mkfifo to simulate slow :write.
+  it('emitted by slow :write/:read/:edit #41193 #41713', function()
     local fname = 'Xtest_progress_bufwrite'
     finally(function()
       os.remove(fname)
     end)
 
-    -- ":write" faster than `slow_write_ns` does not emit a progress-msg.
+    -- ":write" faster than `slow_io_ns` does not emit a progress-msg.
     command('write ' .. fname)
     assert_progress_autocmd(nil)
 
-    -- ":read" does not emit a progress-msg.
+    -- ":read" faster than `slow_io_ns` does not emit a progress-msg.
     command('read ' .. fname)
     assert_progress_autocmd(nil)
 
-    os.remove(fname)
-    fn.system({ 'mkfifo', fname })
-
-    --- Slow :write. Simulated by writing to a fifo, read by `reader` after > `slow_write_ns`.
-    local function slow_write(reader)
-      return exec_lua(function(f, cmd)
+    --- Slow :read/:edit (decided by `slow_io_ns()`).
+    local function slow_read(cmd)
+      return exec_lua(function(fname_, cmd_)
         local out = {}
         vim.api.nvim_create_autocmd('Progress', {
+          group = vim.api.nvim_create_augroup('test_slow_read', {}),
+          callback = function(ev)
+            table.insert(out, ev.data.status)
+            out.id = ev.data.id
+            -- :bwipeout disallowed (E937) while reading.
+            out.wiped = out.wiped or pcall(vim.cmd.bwipe, { bang = true })
+          end,
+        })
+
+        -- XXX: $NVIM_TEST + v:testing = slow_io_ns() treats all file I/O as "slow".
+        vim.v.testing = 1
+        vim.cmd[cmd_](fname_)
+        vim.v.testing = 0
+
+        return { out[1], out[#out], out.wiped, out.id }
+      end, fname, cmd)
+    end
+
+    fn.writefile({ 'a', 'b' }, fname)
+    local read_id = ('nvim.bufread "%s"'):format(fname)
+    eq({ 'running', 'success', false, read_id }, slow_read('edit')) -- Despite 'shortmess' F.
+    eq({ 'running', 'success', false, read_id }, slow_read('read'))
+
+    --- Slow :write (decided by `slow_io_ns()`). Writes to a fifo read by `cmd`, if given.
+    local function slow_write(cmd, edit_on)
+      return exec_lua(function(fname_, cmd_, edit_on_)
+        local out = {}
+        vim.api.nvim_create_autocmd('Progress', {
+          group = vim.api.nvim_create_augroup('test_slow_write', {}),
           callback = function(ev)
             table.insert(out, ev.data.status)
             -- :bwipeout disallowed (E937) while writing.
             out.wiped = out.wiped or pcall(vim.cmd.bwipe, { bang = true })
+            if ev.data.status == edit_on_ and not out.edited then
+              out.edited = true
+              -- Progress handler (naughty) edits the buffer DURING :write.
+              vim.api.nvim_buf_set_lines(0, -1, -1, true, { 'not written' })
+            end
           end,
         })
         vim.api.nvim_buf_set_lines(0, 0, -1, true, vim.fn['repeat']({ ('x'):rep(99) }, 2000))
-        local proc = vim.system({
-          'sh',
-          '-c',
-          ('exec 3<"$1"; sleep 0.6; %s <&3 >/dev/null'):format(cmd),
-          'sh',
-          f,
-        })
-        local ok, err = pcall(vim.cmd.write, { f, bang = true })
-        proc:wait()
+        local proc = cmd_
+          and vim.system({ 'sh', '-c', ('%s "$1" >/dev/null'):format(cmd_), 'sh', fname_ })
+
+        -- XXX: $NVIM_TEST + v:testing = slow_io_ns() treats all file I/O as "slow".
+        vim.v.testing = 1
+        local ok, err = pcall(vim.cmd.write, { fname_, bang = true })
+        vim.v.testing = 0
+
+        if proc then
+          proc:wait()
+        end
         return { out[1], out[#out], out.wiped, ok and 'ok' or err:match('E%d+') }
-      end, fname, reader)
+      end, fname, cmd or false, edit_on or false)
     end
 
-    eq({ 'running', 'success', false, 'ok' }, slow_write('cat'))
+    eq({ 'running', 'success', false, 'ok' }, slow_write(nil, 'success'))
+    -- Buffer changed after writing: still 'modified'.
+    eq(true, api.nvim_get_option_value('modified', {}))
+    -- Buffer changed while writing: abort, restore the original file.
+    fn.writefile({ 'original' }, fname)
+    eq({ 'running', 'failed', false, 'E787' }, slow_write(nil, 'running'))
+    eq({ 'original' }, fn.readfile(fname))
+
+    t.skip(t.is_os('win'), 'N/A for Windows') -- Using mkfifo to simulate a write error.
+    os.remove(fname)
+    fn.system({ 'mkfifo', fname })
     eq({ 'running', 'failed', false, 'E514' }, slow_write('head -c 100000')) -- Write error (EPIPE).
   end)
 
