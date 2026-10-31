@@ -1022,15 +1022,20 @@ describe('jobs', function()
 
       it('can pass 0 to check if a job exists', function()
         source([[
-        call rpcnotify(g:channel, 'wait', jobwait(has('win32') ? [
+        let g:jobs = has('win32') ? [
         \  jobstart('Start-Sleep -Milliseconds 50; exit 4'),
         \  jobstart('Start-Sleep -Milliseconds 300; exit 5'),
         \  ] : [
         \  jobstart('sleep 0.05; exit 4'),
         \  jobstart('sleep 0.3; exit 5'),
-        \  ], 0))
+        \  ]
+        call rpcnotify(g:channel, 'wait', jobwait(g:jobs, 0))
         ]])
         eq({ 'notification', 'wait', { { -1, -1 } } }, next_msg())
+
+        -- With a timeout, keeps waiting for the second job after the first one exits.
+        command([[call rpcnotify(g:channel, 'wait', jobwait(g:jobs, 10000))]])
+        eq({ 'notification', 'wait', { { 4, 5 } } }, next_msg())
       end)
     end)
 
@@ -1239,6 +1244,30 @@ describe('jobs', function()
         eq(NIL, api.nvim_get_proc(child_pid))
       end
     end)
+  end)
+
+  it('jobstop() kill timeout excludes prior event-loop blocking #42521', function()
+    skip(is_os('win'), 'N/A: no SIGTERM on Windows')
+    local rv = exec_lua(function()
+      local code --- @type integer?
+      -- Ignores SIGTERM, so only SIGKILL (after the kill timeout) stops it.
+      local job = vim.fn.jobstart({ 'sh', '-c', "trap '' TERM; sleep 10" }, {
+        on_exit = function(_, c)
+          code = c
+        end,
+      })
+      -- Ensure the cached loop time is stale/outdated relative to the jobstop() kill timeout.
+      vim.uv.sleep(500)
+      local start = vim.uv.hrtime()
+      vim.fn.jobstop(job)
+      -- Wake the loop often: a stale timer fires on the first wakeup.
+      vim.wait(5000, function()
+        return code ~= nil
+      end, 10)
+      return { code = code, elapsed = (vim.uv.hrtime() - start) / 1e6 }
+    end)
+    eq(137, rv.code)
+    ok(rv.elapsed >= 1900, '>= 1900 ms', rv.elapsed)
   end)
 
   it('jobstop on same id before stopped', function()
