@@ -2571,8 +2571,9 @@ void win_scroll_lines(win_T *wp, int row, int line_count)
   int checked_width = MIN(grid->cols - col, wp->w_view_width);
   int checked_height = MIN(grid->rows - row_off, wp->w_view_height);
 
-  // No lines are being moved, just draw over the entire area
-  if (row + abs(line_count) >= checked_height) {
+  // No lines are being moved, or the window is not on the grid (stale offsets, see curs_columns()):
+  // just draw over the entire area.
+  if (checked_width <= 0 || row + abs(line_count) >= checked_height) {
     return;
   }
 

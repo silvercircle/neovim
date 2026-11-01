@@ -1410,6 +1410,38 @@ describe('decoration_providers', function()
     n.check_close()
     os.remove(testlog)
   end)
+
+  it('no crash when "start" scrolls a window after the screen shrinks', function()
+    clear()
+    local screen = Screen.new(200, 40)
+    local win = exec_lua(function()
+      vim.cmd('rightbelow vnew')
+      local win = vim.api.nvim_get_current_win()
+      vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'title', ('x'):rep(57) })
+      vim.api.nvim_win_set_cursor(win, { 2, 56 })
+      vim.cmd('wincmd p | vertical resize 120 | redraw')
+      vim.api.nvim_set_decoration_provider(vim.api.nvim_create_namespace('ns'), {
+        on_start = function()
+          vim.fn.line('w0', win)
+        end,
+      })
+      return win
+    end)
+    screen:try_resize(100, 40)
+    -- The window shrank to one column, so line('w0') in "on_start" changed its skipcol.
+    eq(
+      { 1, 19 },
+      exec_lua(function(w)
+        return { vim.api.nvim_win_get_width(w), vim.api.nvim_win_call(w, vim.fn.winsaveview).skipcol }
+      end, win)
+    )
+    screen:expect([[
+      ^                                                                                                  │{1:<}|
+      {1:~                                                                                                 }│x|*37
+      {3:[No Name]                                                                                          }{2:<}|
+                                                                                                          |
+    ]])
+  end)
 end)
 
 local example_text = [[

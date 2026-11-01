@@ -99,7 +99,7 @@ end
 ---
 --- Decides if/when to force-stop the server after sending the "shutdown" request. See |Client:stop()|.
 --- Note: when Nvim itself is exiting,
---- - `false`: Nvim will not force-stop LSP server(s).
+--- - `false`: Nvim will not force-stop LSP server(s), except uninitialized ones (see |Client:stop()|).
 --- - `true`: Nvim will force-stop LSP server(s) that did not comply with the "shutdown" request.
 --- - `number`: Nvim will wait up to `exit_timeout` milliseconds before performing force-stop.
 --- (default: `false`)
@@ -134,7 +134,8 @@ end
 --- for possible errors. Use `vim.lsp.rpc.client_errors[code]` to get human-friendly name.
 --- @field on_error? fun(code: integer, err: string)
 ---
---- Callback invoked on client exit.
+--- Callback invoked on client exit. On Nvim exit, it runs only if the server exits within
+--- `exit_timeout` milliseconds.
 ---   - code: exit code of the process
 ---   - signal: number describing the signal used to terminate (if any)
 ---   - client_id: client handle
@@ -250,10 +251,6 @@ end
 ---
 --- Timer for stop() with timeout.
 --- @field private _shutdown_timer uv.uv_timer_t?
----
---- Track this so that we can escalate automatically if we've already tried a
---- graceful shutdown
---- @field private _graceful_shutdown_failed true?
 ---
 --- The initial trace setting. If omitted trace is disabled ("off").
 --- trace = "off" | "messages" | "verbose";
@@ -554,7 +551,7 @@ function Client:initialize()
   local workspace_folder = self.workspace_folders and self.workspace_folders[1]
   if workspace_folder then
     root_uri = workspace_folder.uri
-    root_path = vim.uri_to_fname(root_uri)
+    root_path = vim.uri.to_fname(root_uri)
   end
 
   -- HACK: Capability modules must be loaded
@@ -605,6 +602,10 @@ function Client:initialize()
   local rpc = self.rpc
 
   rpc.request('initialize', init_params, function(init_err, result)
+    -- Stopped before it answered: the server is being force-stopped (see Client:stop()).
+    if self._is_stopping then
+      return
+    end
     if init_err then
       error(lsp.rpc.format_rpc_error(init_err))
     end
@@ -900,6 +901,8 @@ end
 --- has not exited after `self.exit_timeout` milliseconds (unless `exit_timeout=false`).
 --- Calling stop() on a client that was previously requested to shutdown, will escalate to
 --- force-stop immediately, regardless of `force` (or `self.exit_timeout` if `force=nil`).
+--- A server that has not answered "initialize" cannot receive "shutdown", so it is force-stopped
+--- immediately.
 ---
 --- Note: Forcing shutdown while a server is busy writing out project or index files can lead to
 --- file corruption.
@@ -921,11 +924,12 @@ function Client:stop(force)
     return
   end
 
+  local was_stopping = self._is_stopping
   self._is_stopping = true
 
   lsp._watchfiles.cancel(self.id)
 
-  if force == true or not self.initialized or self._graceful_shutdown_failed then
+  if force == true or not self.initialized or was_stopping then
     rpc.terminate()
     return
   end
@@ -944,7 +948,6 @@ function Client:stop(force)
     else
       -- If there was an error in the shutdown request, then terminate to be safe.
       rpc.terminate()
-      self._graceful_shutdown_failed = true
     end
   end)
 end
@@ -962,6 +965,10 @@ function Client:_restart(force)
     local attached_buffers = vim.tbl_keys(self.attached_buffers)
 
     vim.schedule(function()
+      -- Nvim is exiting: the exit handler would not stop a new client.
+      if vim.v.exiting ~= vim.NIL then
+        return
+      end
       local new_client_id = lsp.start(self.config, { attach = false })
       if new_client_id then
         for _, buffer in ipairs(attached_buffers) do
@@ -1099,8 +1106,8 @@ function Client:_get_registrations(provider, bufnr)
       matched_regs[#matched_regs + 1] = reg
     else
       local language = self:_get_language_id(bufnr)
-      local uri = vim.uri_from_bufnr(bufnr)
-      local fname = vim.uri_to_fname(uri)
+      local uri = vim.uri.from_buf(bufnr)
+      local fname = vim.uri.to_fname(uri)
       for _, filter in ipairs(regoptions.documentSelector) do
         local flang, fscheme, fpat = filter.language, filter.scheme, filter.pattern
         if
@@ -1172,7 +1179,7 @@ function Client:_text_document_did_close_handler(bufnr)
   if not self:supports_method('textDocument/didClose') then
     return
   end
-  local uri = vim.uri_from_bufnr(bufnr)
+  local uri = vim.uri.from_buf(bufnr)
   local params = { textDocument = { uri = uri } }
   self:notify('textDocument/didClose', params, bufnr)
 end
@@ -1192,7 +1199,7 @@ function Client:_text_document_did_open_handler(bufnr)
   self:notify('textDocument/didOpen', {
     textDocument = {
       version = lsp.util.buf_versions[bufnr],
-      uri = vim.uri_from_bufnr(bufnr),
+      uri = vim.uri.from_buf(bufnr),
       languageId = self:_get_language_id(bufnr),
       text = lsp._buf_get_full_text(bufnr),
     },
@@ -1518,7 +1525,8 @@ function Client:_on_exit(code, signal)
       if self then
         changetracking.reset(self)
       end
-      if code ~= 0 or (signal ~= 0 and signal ~= 15) then
+      -- The exit status of a stopped server does not indicate a crash.
+      if not self._is_stopping and (code ~= 0 or (signal ~= 0 and signal ~= 15)) then
         local msg = string.format(
           'Client %s quit with exit code %s and signal %s. Check log for errors: %s',
           self and self.name or 'unknown',
