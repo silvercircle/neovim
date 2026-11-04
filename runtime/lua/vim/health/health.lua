@@ -1,6 +1,8 @@
 local nvim_on = require('vim._core.util').nvim_on
 
 local M = {}
+--- For tests: skip the update check, which queries the network (SLOW).
+M._skip_update_check = false
 local async = require('vim.async') --- @type vim.async._core
 local health = require('vim.health')
 
@@ -666,6 +668,42 @@ local function check_external_tools()
       'Install curl using your package manager.',
     })
   end
+
+  if vim.fn.executable('ssh') == 1 then
+    local ssh_path = vim.fn.exepath('ssh')
+    local ssh_job = vim.system({ ssh_path, '-V' }, { text = true }):wait()
+    -- ssh -V prints version to stderr
+    local ssh_out = vim.trim(ssh_job.stderr or '')
+    if ssh_job.code == 0 then
+      health.ok(('%s (%s)'):format(ssh_out, ssh_path))
+
+      if vim.fn.has('win32') == 1 then
+        health.warn(
+          'Win32-OpenSSH lacks ControlMaster (multiplexing), so :connect ssh:// is not supported.'
+        )
+      else
+        -- Asks `ssh` itself (ignoring ssh_config): `-G` fails on an option it does not support.
+        -- `accept-new` (OpenSSH 7.6) is the newest option that :connect ssh:// uses.
+        local cmd = { ssh_path, '-F', 'none', '-G', '-o', 'StrictHostKeyChecking=accept-new', 'x' }
+        local check = vim.system(cmd, { text = true }):wait()
+        if check.code == 0 then
+          health.ok('ssh supports :connect ssh://')
+        else
+          health.warn(
+            'ssh lacks StrictHostKeyChecking=accept-new (OpenSSH 7.6+), needed by :connect ssh://',
+            { vim.trim(check.stderr or '') }
+          )
+        end
+      end
+    else
+      health.warn('ssh is installed but failed to run `ssh -V`', { ssh_job.stderr })
+    end
+  else
+    health.warn('ssh not found', {
+      'Required for remote SSH connections (:connect ssh://).',
+      'Install ssh using your package manager.',
+    })
+  end
 end
 
 local function detect_terminal()
@@ -766,7 +804,9 @@ local function check_sysinfo()
   local nvim_version = version_out:match('NVIM (v[^\n]+)') or 'unknown'
   local commit = (version_out:match('%+g(%x+)') or ''):sub(1, 12)
 
-  if vim.fn.executable('git') ~= 1 then
+  if M._skip_update_check then
+    vim.health.info('Skipped update check.')
+  elseif vim.fn.executable('git') ~= 1 then
     vim.health.warn('Cannot check for updates: git not found')
   elseif vim.trim(commit) ~= '' then
     check_head_hash(commit)

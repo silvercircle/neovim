@@ -214,6 +214,10 @@ describe('TUI :detach', function()
       { child_session:request('nvim_command', 'detach foo') }
     )
 
+    -- XXX: Error if `current_ui` was set by (input from) a non-UI client.
+    child_session:request('nvim_input', '<Esc>:%detach<CR>')
+    screen:expect({ any = 'E5768: No UI attached' }) -- TODO(justinmk): confusing msg...
+
     tt.feed_data('\027\027:detach\013')
     -- Note: "Process exited" message is misleading; tt.setup_child_nvim() sees the foreground
     -- process (client) exited, and doesn't know the server is still running?
@@ -1033,6 +1037,10 @@ describe('TUI :connect', function()
 
     tt.feed_data(':connect\013')
     screen1:expect({ any = 'E471: Argument required' })
+
+    -- No server at address: fails, UI stays attached (and "!" does not stop server).
+    tt.feed_data((':connect! %s\013'):format(new_pipename()))
+    screen1:expect({ any = 'E6102: Cannot connect to' })
 
     tt.feed_data('iThis is server 1.\027')
     screen1:expect({ any = vim.pesc('This is server 1^.') })
@@ -2908,6 +2916,7 @@ describe('TUI', function()
       id = ui_chan,
       mode = 'rpc',
       stream = 'stdio',
+      trust = true,
     }
 
     local status, chan_info = child_session:request('nvim_get_chan_info', ui_chan)
@@ -3466,15 +3475,6 @@ describe('TUI', function()
     end)
   end)
 
-  it('security: server-to-client API calls are rejected', function()
-    local ok, err = unpack(child_exec_lua([[
-      local ui = vim.api.nvim_list_uis()[1].chan
-      return { pcall(vim.rpcrequest, ui, 'nvim_exec_lua', 'return vim.fn.getpid()', {}) }
-    ]]))
-    eq(false, ok)
-    t.matches('UI client does not accept API calls: nvim_exec_lua', err)
-  end)
-
   it('stdin and stdout are tty fds in embedded server #38172', function()
     eq(
       { 'tty', 'tty' },
@@ -3492,6 +3492,15 @@ describe('TUI', function()
     -- The server is now detached and needs to be quit explicitly.
     feed_data(':qall!\r')
     screen:expect({ any = vim.pesc('[Process exited 0]') })
+  end)
+
+  it('security: server-to-client API calls are rejected', function()
+    local ok, err = unpack(child_exec_lua([[
+      local ui = vim.api.nvim_list_uis()[1].chan
+      return { pcall(vim.rpcrequest, ui, 'nvim_exec_lua', 'return vim.fn.getpid()', {}) }
+    ]]))
+    eq(false, ok)
+    t.matches('Rejected API call from untrusted peer: nvim_exec_lua', err)
   end)
 end)
 
