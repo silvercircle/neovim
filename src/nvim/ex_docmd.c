@@ -2598,6 +2598,8 @@ int parse_command_modifiers(exarg_T *eap, const char **errormsg, cmdmod_T *cmod,
         break;
       }
       if (!skip_only) {
+        xfree(cmod->cmod_filter_pat);
+        vim_regfree(cmod->cmod_filter_regmatch.regprog);
         cmod->cmod_filter_pat = xstrdup(reg_pat);
         cmod->cmod_filter_regmatch.regprog = vim_regcomp(reg_pat, RE_MAGIC);
         if (cmod->cmod_filter_regmatch.regprog == NULL) {
@@ -4894,7 +4896,8 @@ static void ex_exmode(exarg_T *eap)
 /// ":restart +cmd <command>": restart the Nvim server using ":cmd" and runs <command> in the new server.
 static void ex_restart(exarg_T *eap)
 {
-  // XXX: The UI reaches this server through an SSH tunnel, which cannot reach the new server.
+  // XXX: The UI reaches this server through an SSH tunnel, but the "restart" event gives it the new
+  // server's (remote) address.
   if (strequal(get_vim_var_str(VV_STARTREASON), "remote-ssh")) {
     emsg(_("E6103: :restart is not supported with remote-ssh"));
     return;
@@ -5040,7 +5043,7 @@ static void ex_restart(exarg_T *eap)
   MAXSIZE_TEMP_ARRAY(detach_args, 2);
   ADD_C(detach_args, INTEGER_OBJ(0));
   ADD_C(detach_args, DICT_OBJ(detach_opts));
-  rpc_send_call(channel->id, "nvim_chan_set", detach_args, &result_mem, &err);
+  rpc_send_call(channel->id, "nvim_chan_set", detach_args, -1, &result_mem, &err);
   if (ERROR_SET(&err)) {
     goto fail_2;
   }
@@ -5056,7 +5059,7 @@ static void ex_restart(exarg_T *eap)
     MAXSIZE_TEMP_ARRAY(autocmd_args, 2);
     ADD_C(autocmd_args, CSTR_AS_OBJ("UIEnter"));
     ADD_C(autocmd_args, DICT_OBJ(autocmd_opts));
-    rpc_send_call(channel->id, "nvim_create_autocmd", autocmd_args, &result_mem, &err);
+    rpc_send_call(channel->id, "nvim_create_autocmd", autocmd_args, -1, &result_mem, &err);
     if (ERROR_SET(&err)) {
       goto fail_2;
     }
@@ -5067,7 +5070,8 @@ static void ex_restart(exarg_T *eap)
   // Get the new server's initial address. On Windows this is the temporary self-generated address.
   MAXSIZE_TEMP_ARRAY(servername_args, 1);
   ADD_C(servername_args, CSTR_AS_OBJ("servername"));
-  Object result = rpc_send_call(channel->id, "nvim_get_vvar", servername_args, &result_mem, &err);
+  Object result = rpc_send_call(channel->id, "nvim_get_vvar", servername_args, -1, &result_mem,
+                                &err);
   if (ERROR_SET(&err)) {
     goto fail_2;
   }
@@ -5091,7 +5095,7 @@ static void ex_restart(exarg_T *eap)
     ADD_C(handoff_params, CSTR_AS_OBJ(listen_arg));
     ADD_C(handoff_params, INTEGER_OBJ((Integer)ui_active()));
     ADD_C(lua_args, ARRAY_OBJ(handoff_params));
-    rpc_send_call(channel->id, "nvim_exec_lua", lua_args, &result_mem, &err);
+    rpc_send_call(channel->id, "nvim_exec_lua", lua_args, -1, &result_mem, &err);
     if (ERROR_SET(&err)) {
       goto fail_2;
     }
@@ -5138,7 +5142,7 @@ fail_2:
   // Before killing the new server, close its stderr to avoid polluting the current UI.
   MAXSIZE_TEMP_ARRAY(chanclose_expr_args, 1);
   ADD_C(chanclose_expr_args, CSTR_AS_OBJ("chanclose(v:stderr)"));
-  rpc_send_call(channel->id, "nvim_eval", chanclose_expr_args, &result_mem, &err);
+  rpc_send_call(channel->id, "nvim_eval", chanclose_expr_args, -1, &result_mem, &err);
   api_clear_error(&err);
   arena_mem_free(result_mem);
 #endif
@@ -5941,7 +5945,7 @@ static void ex_connect(exarg_T *eap)
     typval_T argvars[] = { { .v_type = VAR_STRING, .vval.v_string = addr },
                            { .v_type = VAR_NUMBER, .vval.v_number = (varnumber_T)current_ui },
                            { .v_type = VAR_UNKNOWN } };
-    nlua_call_typval("vim.net._ssh", "start", argvars, &ssh_rettv);
+    nlua_call_typval("vim.net._ssh", "connect", argvars, &ssh_rettv);
 
     if (ssh_rettv.v_type == VAR_SPECIAL) {
       return;  // User declined the prompt.

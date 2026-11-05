@@ -161,7 +161,7 @@ EVENTS
 • |BufModifiedSet| has been removed. Use the |OptionSet| event with pattern
   "modified" instead.
 • |ui-messages| `msg_show.completion` messages are now `msg_show.progress`
-  events. If :write or :edit is slow it emits `msg_show.progress` events.
+  events.
 
 LSP
 
@@ -420,6 +420,9 @@ LUA
   your terminal supports it.
 • |vim.net.request()| can specify custom headers by passing `opts.headers`.
 • |vim.net.request()| can now accept  `method` param overload for multiple HTTP methods.
+• |vim.rpcrequest()| can specify `opts.timeout`.
+• |SystemObj:wait()| accepts a `cond` predicate which allows you to wait for
+  a condition instead of process termination.
 • |writefile()| treats Lua and RPC strings as |Blob|, so it can be used to
   write binary data.
 • |vim.fs.abspath()| gained `cwd` and `plain` parameters.
@@ -450,6 +453,11 @@ LUA
 • |vim.ui.input()| now allows setting input scope.
 • |vim.uri| is a module. The old `uri_xx` top-level functions were renamed,
   e.g. `vim.uri_to_fname()` is now |vim.uri.to_fname()|.
+  • Parse/build URIs with |vim.uri.parse()|, |vim.uri.new()|,
+    |vim.uri.join()|.
+  • Check equality with |vim.uri.normalize()|.
+  • Parse/build querystrings with |vim.uri.encode_query()| and
+    |vim.uri.decode_query()|.
 • |vim.log| provides a logging interface.
 • |vim.pack.get()| output includes revision of a pending update.
 • |vim.pack.get()| can fetch new updates before computing the output.
@@ -489,6 +497,7 @@ OPTIONS
 
 PERFORMANCE
 
+• If :write or :edit is slow it emits `msg_show.progress` events.
 • LSP shares identical file watcher registrations, reducing startup work in
   large workspaces. On macOS and Windows, watchers with different glob
   patterns share one native watcher per directory, which reduces cleanup work
@@ -572,10 +581,10 @@ VIMSCRIPT
 • |v:useractive| indicates user activity.
 • |serverlist()| with `info=true` returns details for each server (own + peers).
 • These Vimscript functions may be called from |api-fast| context (e.g.
-  |vim.uv| timer/handle callbacks): |keytrans()|, |char2nr()|, |nr2char()|,
-  |str2list()|, |strpart()|, |strcharpart()|, |strgetchar()|, |strchars()|,
-  |strcharlen()|, |strlen()|, |strdisplaywidth()|, |byteidx()|, |charidx()|,
-  |utf16idx()|, |tr()|, |trim()|.
+  |vim.uv| timer/handle callbacks): |getenv()|, |keytrans()|, |char2nr()|,
+  |nr2char()|, |str2list()|, |strpart()|, |strcharpart()|, |strgetchar()|,
+  |strchars()|, |strcharlen()|, |strlen()|, |strdisplaywidth()|, |byteidx()|,
+  |charidx()|, |utf16idx()|, |tr()|, |trim()|.
 
 ==============================================================================
 CHANGED FEATURES                                                 *news-changed*

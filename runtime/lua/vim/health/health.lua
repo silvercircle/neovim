@@ -620,10 +620,10 @@ local function check_external_tools()
         return
       end
       if vim.version.le(curl_version, { 7, 12, 3 }) then
-        health.warn(('curl version %s not compatible'):format(curl_version))
+        health.warn(('curl version %s not compatible'):format(tostring(curl_version)))
         return
       end
-      local lines = { string.format('curl %s (%s)', curl_version, curl_path) }
+      local lines = { ('curl %s (%s)'):format(tostring(curl_version), curl_path) }
 
       for line in vim.gsplit(curl_out, '\n', { plain = true }) do
         if line ~= '' then
@@ -864,8 +864,9 @@ local function check_sysinfo()
     if win == -1 then
       return
     end
-    local encoded_body = vim.uri.encode(body) --- @type string
-    local issue_url = 'https://github.com/neovim/neovim/issues/new?type=Bug&body=' .. encoded_body
+    local issue_url = ('https://github.com/neovim/neovim/issues/new?%s'):format(
+      vim.uri.encode_query({ type = 'Bug', body = body })
+    )
 
     --- Opens the prefilled issue from the checkhealth winbar.
     ---@diagnostic disable-next-line: global-in-non-module
@@ -875,11 +876,9 @@ local function check_sysinfo()
     vim.wo[win].winbar =
       '%#WarningMsg#%@v:lua.nvim_health_bugreport_open@▶ Create Bug Report on GitHub%X%*'
 
-    vim.api.nvim_create_autocmd('BufDelete', {
-      buf = buf,
-      once = true,
-      command = 'lua _G.nvim_health_bugreport_open = nil',
-    })
+    nvim_on('BufDelete', nil, { buf = buf, once = true }, function()
+      _G.nvim_health_bugreport_open = nil
+    end)
   end)
 end
 
