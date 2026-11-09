@@ -303,7 +303,12 @@ end
 --- place.
 ---@return fun(status: 'running'|'success'|'failed', msg: string)
 local function new_progress_report()
-  local progress = { kind = 'progress', source = 'remote-ssh', title = 'remote-ssh' }
+  local progress = {
+    kind = 'progress',
+    source = 'remote-ssh',
+    title = 'remote-ssh',
+    _truncate = true,
+  }
   return function(status, msg)
     if status == 'failed' then
       log().error(msg)
@@ -415,9 +420,24 @@ end
 local function push_config(uri, dir)
   local env = { COPYFILE_DISABLE = '1' } -- No macOS `._*` files.
   -- -h: Copies symlink targets (e.g. links made by a dotfiles manager).
-  local tar = vim
-    .system({ 'tar', '-czf', '-', '-h', '--exclude=.git', '-C', dir, '.' }, { env = env })
-    :wait()
+  local cmd = { 'tar', '-czf', '-', '-h', '--exclude=.git' }
+
+  -- Exclude broken symlinks (fails GNU `tar -h` #42747).
+  for name, type in
+    vim.fs.dir(dir, {
+      depth = vim._maxint,
+      skip = function(d)
+        return vim.fs.basename(d) ~= '.git'
+      end,
+    })
+  do
+    if type == 'link' and not vim.uv.fs_stat(vim.fs.joinpath(dir, name)) then
+      table.insert(cmd, ('--exclude=./%s'):format((name:gsub('[][*?\\]', '\\%0'))))
+    end
+  end
+
+  vim.list_extend(cmd, { '-C', dir, '.' })
+  local tar = vim.system(cmd, { env = env }):wait()
   if tar.code ~= 0 then
     error(('Failed to pack %s: %s'):format(dir, tar.stderr))
   end
@@ -575,9 +595,21 @@ local function connect(uri_str, chan, report, update, config)
     table.insert(args, 1, '--update')
   end
   tunnel = run_script(uri, args, { ssh_args = { '-L', forward } }, on_exit)
-  local ok, res = pcall(tunnel.wait, tunnel, 300000, function(stdout)
-    return stdout:match('NVIM_READY') ~= nil
+
+  local shown --- @type string? Latest line of stderr, e.g. the status of `remote_ssh.sh`.
+  -- Report stderr lines until NVIM_READY.
+  local ok, res = pcall(tunnel.wait, tunnel, 300000, function(stdout, stderr)
+    if stdout:match('NVIM_READY') then
+      return true
+    end
+    local line = vim.trim(stderr):match('[^\n]+$') -- Skip blank lines.
+    if line and line ~= shown then
+      shown = line
+      report('running', line)
+    end
+    return false
   end)
+
   if not ok then -- CTRL-C.
     teardown()
     error(res, 0)

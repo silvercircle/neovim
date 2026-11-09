@@ -227,11 +227,8 @@ describe('TUI :detach', function()
 
     -- Shows info message on stderr.
     local out = table.concat(api.nvim_buf_get_lines(0, 0, -1, false))
-    t.matches(('Detached from %s'):format(vim.pesc(child_server)), out)
-    t.matches(
-      ('To reattach: nvim %%-%%-remote%%-ui %%-%%-server "%s"'):format(vim.pesc(child_server)),
-      out
-    )
+    t.matches(('Detached from: %s'):format(vim.pesc(child_server)), out)
+    t.matches(vim.pesc('To reattach run :connect or nvim +"connect <address>"'), out)
 
     child_uis --[[@type any[] ]] = ({ child_session:request('nvim_list_uis') })[2]
     eq(0, #child_uis)
@@ -1107,16 +1104,13 @@ describe('TUI :connect', function()
                                                       |
   ]]
 
-  it('leaves the current server running', function()
+  it('leaves server running if other attached UIs; fails if buffer is modified', function()
     local server1 = new_pipename()
     local screen1 = tt.setup_child_nvim({ '--listen', server1, '--clean' })
     screen1:expect({ any = vim.pesc('[No Name]') })
 
-    tt.feed_data(':connect\013')
-    screen1:expect({ any = 'E471: Argument required' })
-
-    -- No server at address: fails, UI stays attached (and "!" does not stop server).
-    tt.feed_data((':connect! %s\013'):format(new_pipename()))
+    -- No server at address: fails, UI stays attached.
+    tt.feed_data((':connect %s\013'):format(new_pipename()))
     screen1:expect({ any = 'E6102: Cannot connect to' })
     -- Relative to CWD.
     tt.feed_data(':connect bogus\013')
@@ -1137,6 +1131,29 @@ describe('TUI :connect', function()
     tt.feed_data('iThis is server 2.\027')
     screen2:expect({ any = vim.pesc('This is server 2^.') })
 
+    -- Last UI, modified buffer: fails before doing anything, UI stays attached.
+    for _, arg in ipairs({ server1, '', 'ssh://nvim-test-no-such-host' }) do
+      tt.feed_data((':connect %s\013'):format(arg))
+      screen2:expect({ any = 'E162: No write since last change' })
+      tt.feed_data('\013') -- Dismiss hit-enter.
+      screen2:expect({ any = vim.pesc('This is server 2^.'), none = 'E162' })
+    end
+
+    -- Another UI is attached: the server stays for it.
+    local server2_session = n.connect(server2)
+    server2_session:request('nvim_ui_attach', 50, 7, {})
+
+    if not is_os('win') then -- serverlist() doesn't discover Windows peers yet.
+      -- Chooses server1 from the menu, if it is there.
+      local choose = 'vim.ui.select = function(addrs, _, on_choice) '
+        .. 'on_choice(vim.list_contains(addrs, %q) and %q or nil) end'
+      tt.feed_data((':lua %s\013'):format(choose:format(server1, server1)))
+      tt.feed_data(':connect\013')
+      screen2:expect({ any = vim.pesc('This is server 1^.') })
+      tt.feed_data((':connect %s\013'):format(server2))
+      screen2:expect({ any = vim.pesc('This is server 2^.') })
+    end
+
     if is_os('win') then
       -- still supports backslashes
       server1 = server1:gsub('/', '\\')
@@ -1156,8 +1173,6 @@ describe('TUI :connect', function()
 
     screen2:detach()
 
-    local server2_session = n.connect(server2)
-
     local screen3 = tt.setup_child_nvim({ '--remote-ui', '--server', server2 })
     screen3:expect({ any = vim.pesc('This is server 2^.') })
 
@@ -1165,7 +1180,7 @@ describe('TUI :connect', function()
     server2_session:request('nvim_command', 'qall!')
   end)
 
-  it('! stops the current server', function()
+  it('stops the current server if nothing would be lost', function()
     local server1 = new_pipename()
     local screen1 = tt.setup_child_nvim({ '--listen', server1, '--clean' })
     screen1:expect({ any = vim.pesc('[No Name]') })
@@ -1182,9 +1197,9 @@ describe('TUI :connect', function()
     local screen2 = tt.setup_child_nvim({ '--listen', server2, '--clean' })
     screen2:expect({ any = vim.pesc('[No Name]') })
 
-    tt.feed_data(':connect! ' .. server1 .. '\013')
+    tt.feed_data(':connect ' .. server1 .. '\013')
     screen2:expect({ any = vim.pesc('This is server 1^.') })
-
+    -- Nothing to lose in server2.
     retry(nil, nil, function()
       eq(nil, vim.uv.fs_stat(server2))
     end)
