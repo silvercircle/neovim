@@ -359,6 +359,9 @@ EDITOR
 
 EVENTS
 
+• The |hit-enter| prompt processes events (|vim.schedule()| callbacks, timers,
+  RPC requests) while waiting, like |getchar()|, so |nvim_get_mode()| reports
+  `blocking=false`. Redrawing is postponed until the prompt is dismissed.
 • |:delmarks| now triggers the |MarkSet| autocommand with line==col==0, same
   as |nvim_buf_del_mark()|
 • |ChanClose| is triggered after a channel is closed, before it is removed.
@@ -369,6 +372,8 @@ EVENTS
 • |TabMoved| is triggered when tabs are reordered.
 • |DirReadPost| is triggered after each |dir| listing is rendered, so it can
   be sorted or filtered. See |dir-render|.
+• CTRL-C sends SIGINT to ":!" and "system()" child processes (before
+  escalating to SIGTERM/SIGKILL, as usual).
 
 HIGHLIGHTS
 
