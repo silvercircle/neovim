@@ -37,14 +37,21 @@
 
 #define READ_BUFFER_SIZE 0xfff
 #define INPUT_BUFFER_SIZE ((READ_BUFFER_SIZE * 4) + MAX_KEY_CODE_LEN)
+#define BREAKCHECK_NS (20 * 1000000)  // 20ms.
 
 static char input_buffer[INPUT_BUFFER_SIZE];
 static char *input_read_pos = input_buffer;
 static char *input_write_pos = input_buffer;
 
-static bool blocking = false;
+/// What inbuf_poll() is doing.
+static enum {
+  kPollNone,
+  kPollInput,     ///< Polling input; the caller processes `main_loop.events`.
+  kPollBlocking,  ///< Waiting for input; nobody processes `main_loop.events`.
+} polling = kPollNone;
 static uint64_t cursorhold_time = 0;  ///< Time (ns) spent waiting for CursorHold event.
 static int cursorhold_tb_change_cnt = 0;  ///< tb_change_cnt when waiting started
+static unsigned breakcheck_count = 0;
 
 #include "os/input.c.generated.h"
 
@@ -109,11 +116,6 @@ int input_get(uint8_t *buf, int maxlen, int ms, int tb_change_cnt, MultiQueue *e
 
   TRY_READ();
 
-  // No risk of a UI flood, so disable CTRL-C "interrupt" behavior if it's mapped.
-  if ((mapped_ctrl_c | curbuf->b_mapped_ctrl_c) & get_real_state()) {
-    ctrl_c_interrupts = false;
-  }
-
   if (ms >= 0) {
     if (!inbuf_poll(ms, events)) {
       return 0;
@@ -139,6 +141,9 @@ int input_get(uint8_t *buf, int maxlen, int ms, int tb_change_cnt, MultiQueue *e
       wait_time = MIN(MAX(delay_left, 0), wait_time);
     }
     if (!inbuf_poll((int)wait_time, events)) {
+      if (got_int) {
+        return 0;
+      }
       if (silent_mode) {
         // Ran out of input: exit silent/batch-mode (-es/-Es).
         getout(0);
@@ -172,8 +177,6 @@ int input_get(uint8_t *buf, int maxlen, int ms, int tb_change_cnt, MultiQueue *e
     }
   }
 
-  ctrl_c_interrupts = true;
-
   // If input was put directly in typeahead buffer bail out here.
   if (typebuf_changed(tb_change_cnt)) {
     return 0;
@@ -197,7 +200,7 @@ bool os_char_avail(void)
   return inbuf_poll(0, NULL);
 }
 
-/// Poll for fast events. `got_int` will be set to `true` if CTRL-C was typed.
+/// Polls for fast events, and checks for CTRL-C (`got_int`).
 ///
 /// This invokes a full libuv loop iteration which can be quite costly.
 /// Prefer `line_breakcheck()` if called in a busy inner loop.
@@ -208,44 +211,28 @@ bool os_char_avail(void)
 /// available)
 void os_breakcheck(void)
 {
-  if (got_int) {
+  if (got_int || !main_loop.events || main_loop.closing) {
     return;
   }
 
   loop_poll_events(&main_loop, 0);
 }
 
-#define BREAKCHECK_SKIP 1000
-static int breakcheck_count = 0;
-
-/// Check for CTRL-C pressed, but only once in a while.
-///
-/// Should be used instead of os_breakcheck() for functions that check for
-/// each line in the file.  Calling os_breakcheck() each time takes too much
-/// time, because it will use system calls to check for input.
+/// Calls os_breakcheck() if main loop has not polled for 20ms.
+/// For loops that check per-line or per-command: CTRL-C is caught after ~20ms or 1 iteration.
 void line_breakcheck(void)
 {
-  if (++breakcheck_count >= BREAKCHECK_SKIP) {
-    breakcheck_count = 0;
+  if (os_hrtime() - main_loop.poll_time >= BREAKCHECK_NS) {
     os_breakcheck();
   }
 }
 
-/// Like line_breakcheck() but check 10 times less often.
+/// Like line_breakcheck(), but reads the clock less frequently.
+/// For tight loops where a call does under ~1µs of work (and doesn't run user code).
 void fast_breakcheck(void)
 {
-  if (++breakcheck_count >= BREAKCHECK_SKIP * 10) {
-    breakcheck_count = 0;
-    os_breakcheck();
-  }
-}
-
-/// Like line_breakcheck() but check 100 times less often.
-void veryfast_breakcheck(void)
-{
-  if (++breakcheck_count >= BREAKCHECK_SKIP * 100) {
-    breakcheck_count = 0;
-    os_breakcheck();
+  if ((++breakcheck_count & 1023) == 0) {  // Read the clock every 1024 calls.
+    line_breakcheck();
   }
 }
 
@@ -295,6 +282,7 @@ size_t input_enqueue(uint64_t chan_id, String keys)
     input_read_pos = input_buffer;
     input_write_pos = input_buffer;
   }
+  const size_t old_available = input_available();
 
   if (keys.size > 0) {
     set_vim_var_nr(VV_USERACTIVE, (varnumber_T)os_realtime());
@@ -348,7 +336,7 @@ size_t input_enqueue(uint64_t chan_id, String keys)
   }
 
   size_t rv = (size_t)(ptr - keys.data);
-  process_ctrl_c();
+  process_ctrl_c(old_available);
   return rv;
 }
 
@@ -513,10 +501,17 @@ void input_enqueue_mouse(int code, uint8_t modifier, int grid, int row, int col)
 /// @return true if the main loop is blocked and waiting for input.
 bool input_blocking(void)
 {
-  return blocking;
+  return polling == kPollBlocking;
+}
+
+/// Whether Nvim is waiting for user input.
+bool input_waiting(void)
+{
+  return state_waiting && polling != kPollNone;
 }
 
 /// Checks for (but does not read) available input, and consumes `main_loop.events` while waiting.
+/// Stops waiting on interrupt (`got_int`).
 ///
 /// @param ms Timeout in milliseconds. -1 for indefinite wait, 0 for no wait.
 /// @param events (optional) Queue to check for pending events.
@@ -528,7 +523,9 @@ static bool inbuf_poll(int ms, MultiQueue *events)
   }
 
   if (ms == 0) {
+    polling = kPollInput;
     LOOP_PROCESS_EVENTS(&main_loop, NULL, 0);
+    polling = kPollNone;
     return os_input_ready(events);
   }
 
@@ -536,21 +533,23 @@ static bool inbuf_poll(int ms, MultiQueue *events)
     prof_input_start();
   }
 
-  if (events != main_loop.events) {
+  polling = events == main_loop.events ? kPollInput : kPollBlocking;
+  if (polling == kPollBlocking) {
     // The pending input provoked a blocking wait. Do special events now. #6247
-    blocking = true;
     multiqueue_process_events(ch_before_blocking_events);
   }
   DLOG("blocking... events=%s", !!events ? "true" : "false");
-  LOOP_PROCESS_EVENTS_UNTIL(&main_loop, NULL, ms, os_input_ready(events) || input_unanswerable());
-  blocking = false;
+  LOOP_PROCESS_EVENTS_UNTIL(&main_loop, NULL, ms,
+                            os_input_ready(events) || got_int || input_unanswerable());
+  polling = kPollNone;
 
   if (do_profiling == PROF_YES) {
     prof_input_end();
   }
 
-  if (input_unanswerable() && !os_input_ready(events)) {
-    // Dismiss the prompt (CTRL-C) instead of waiting forever.
+  if (!got_int && input_unanswerable() && !os_input_ready(events)) {
+    // Nvim is exiting: instead of waiting forever, dismiss the prompt and interrupt the code that
+    // prompted. Skips remaining exit autocmds.
     static bool did_log = false;  // Log once (the interrupt may be caught...).
     if (!did_log) {
       did_log = true;
@@ -558,38 +557,31 @@ static bool inbuf_poll(int ms, MultiQueue *events)
       get_mode(mode);
       WLOG("Interrupted prompt (mode=%s): user input is unlikely", mode);
     }
-    input_enqueue_raw("\003", 1);
-    // Also interrupt the code that prompted. Skips remaining exit autocmds.
     got_int = true;
   }
 
   return os_input_ready(events);
 }
 
-static void process_ctrl_c(void)
+/// Converts the last CTRL-C in the input enqueued after `start` into an interrupt: consumes it and
+/// all input before it (typeahead), and sets `got_int`. Unless input_waiting(): then it's a key.
+static void process_ctrl_c(size_t start)
 {
-  if (!ctrl_c_interrupts) {
+  if (input_waiting()) {
     return;
   }
 
-  size_t available = input_available();
-  ssize_t i;
-  for (i = (ssize_t)available - 1; i >= 0; i--) {  // Reverse-search input for Ctrl_C.
+  for (size_t i = input_available(); i-- > start;) {  // Reverse-search input for CTRL-C.
     uint8_t c = (uint8_t)input_read_pos[i];
     if (c == Ctrl_C
         || (c == 'C' && i >= 3
             && (uint8_t)input_read_pos[i - 3] == K_SPECIAL
             && (uint8_t)input_read_pos[i - 2] == KS_MODIFIER
             && (uint8_t)input_read_pos[i - 1] == MOD_MASK_CTRL)) {
-      input_read_pos[i] = Ctrl_C;
+      input_read_pos += i + 1;
       got_int = true;
-      break;
+      return;
     }
-  }
-
-  if (got_int && i > 0) {
-    // Remove all unprocessed input (typeahead) before the CTRL-C.
-    input_read_pos += i;
   }
 }
 

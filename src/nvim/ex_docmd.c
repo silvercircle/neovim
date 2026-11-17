@@ -5484,7 +5484,7 @@ static void ex_print(exarg_T *eap)
   if (curbuf->b_ml.ml_flags & ML_EMPTY) {
     emsg(_(e_empty_buffer));
   } else {
-    for (linenr_T line = eap->line1; line <= eap->line2 && !got_int; os_breakcheck()) {
+    for (linenr_T line = eap->line1; line <= eap->line2 && !got_int; line_breakcheck()) {
       print_line(line,
                  (eap->cmdidx == CMD_number || eap->cmdidx == CMD_pound
                   || (eap->flags & EXFLAG_NR)),
@@ -6606,12 +6606,6 @@ void do_sleep(int64_t msec, bool hide_cursor)
 
   ui_flush();  // flush before waiting
   LOOP_PROCESS_EVENTS_UNTIL(&main_loop, main_loop.events, msec, got_int);
-
-  // If CTRL-C was typed to interrupt the sleep, drop the CTRL-C from the
-  // input buffer, otherwise a following call to input() fails.
-  if (got_int) {
-    vpeekc();
-  }
 
   if (hide_cursor) {
     ui_busy_stop();

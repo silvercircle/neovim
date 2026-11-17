@@ -638,10 +638,11 @@ void terminal_open(Terminal **termpp, buf_T *buf)
   // - b:terminal_color_{NUM}
   // - g:terminal_color_{NUM}
   // - the VTerm instance
+  Arena arena = ARENA_EMPTY;
   for (int i = 0; i < 16; i++) {
     char var[64];
     snprintf(var, sizeof(var), "terminal_color_%d", i);
-    char *name = get_config_string(buf, var);
+    char *name = get_config_string(buf, var, &arena);
     if (name) {
       int dummy;
       RgbValue color_val = name_to_color(name, &dummy);
@@ -657,6 +658,7 @@ void terminal_open(Terminal **termpp, buf_T *buf)
       }
     }
   }
+  arena_mem_free(arena_finish(&arena));
 }
 
 /// Closes the Terminal buffer.
@@ -935,7 +937,6 @@ bool terminal_enter(void)
   int save_state = State;
   s->save_rd = RedrawingDisabled;
   State = MODE_TERMINAL;
-  mapped_ctrl_c |= MODE_TERMINAL;  // Always map CTRL-C to avoid interrupt.
   RedrawingDisabled = false;
 
   set_terminal_winopts(s);
@@ -1162,7 +1163,7 @@ static int terminal_execute(VimState *state, int key)
   case K_EVENT:
     // We cannot let an event free the terminal yet. It is still needed.
     s->term->refcount++;
-    state_handle_k_event();
+    state_handle_k_event(false);
     s->term->refcount--;
     if (s->term->buf_handle == 0) {
       s->close = true;
@@ -1197,12 +1198,6 @@ static int terminal_execute(VimState *state, int key)
     FALLTHROUGH;
 
   default:
-    if (mod_key == Ctrl_C) {
-      // terminal_enter() always sets `mapped_ctrl_c` to avoid `got_int`. 8eeda7169aa4
-      // But `got_int` may be set elsewhere, e.g. by interrupt() or an autocommand,
-      // so ensure that it is cleared.
-      got_int = false;
-    }
     if (mod_key == Ctrl_BSL && !s->got_bsl) {
       s->got_bsl = true;
       break;
@@ -2637,19 +2632,20 @@ static bool is_focused(Terminal *term)
   return State & MODE_TERMINAL && curbuf->terminal == term;
 }
 
-static char *get_config_string(buf_T *buf, char *key)
+static char *get_config_string(buf_T *buf, char *key, Arena *arena)
+  FUNC_ATTR_NONNULL_ALL
 {
   Error err = ERROR_INIT;
-  Object obj = dict_get_value(buf->b_vars, cstr_as_string(key), NULL, &err);
+
+  Object obj = dict_get_value(buf->b_vars, cstr_as_string(key), arena, &err);
   api_clear_error(&err);
   if (obj.type == kObjectTypeNil) {
-    obj = dict_get_value(get_globvar_dict(), cstr_as_string(key), NULL, &err);
+    obj = dict_get_value(get_globvar_dict(), cstr_as_string(key), arena, &err);
     api_clear_error(&err);
   }
   if (obj.type == kObjectTypeString) {
     return obj.data.string.data;
   }
-  api_free_object(obj);
   return NULL;
 }
 
