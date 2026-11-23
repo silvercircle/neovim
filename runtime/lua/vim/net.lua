@@ -52,9 +52,9 @@ end
 ---Buffer to save the response body to.
 ---@field outbuf? integer
 ---
----Custom headers to send with the request. Supports basic key/value headers and empty headers as
----supported by curl. Does not support "@filename" style, internal header deletion ("Header:").
----A list value expands to one header per item: `{ Accept = { 'text/html', 'application/json' } }`.
+---Custom headers to send with the request (not visible to other processes, for security, unlike
+---curl args). Supports key/value, or empty value; does not support "@filename" style, nor internal
+---header deletion ("Header:"). List value expands to one header per item: `{ Accept = { 'text/html', 'application/json' } }`.
 ---@field headers? table<string, string|string[]>
 
 ---@class vim.net.request.Response
@@ -71,6 +71,9 @@ end
 
 --- Makes an HTTP request to the given URL, asynchronously passing the result to the specified
 --- `on_response`, `outpath` or `outbuf`.
+---
+--- Ignores user ".curlrc". Use environment variables to set a proxy or CA bundle (`https_proxy`,
+--- `no_proxy`, `CURL_CA_BUNDLE`).
 ---
 --- Examples:
 --- ```lua
@@ -122,7 +125,8 @@ end
 --- @param opts? vim.net.request.Opts
 --- @param on_response? fun(err?: string, response?: vim.net.request.Response) Invoked (|deferred|)
 ---   on request completion. On HTTP status >= 400, `err` is set and `response` has the status and
----   headers (empty `body`).
+---   headers (empty `body`). `err` is also set after `close()`, or if writing `outbuf` fails
+---   (`response` is complete).
 --- @overload fun(url: string|vim.Uri, opts?: vim.net.request.Opts, on_response?: fun(err?: string, response?: vim.net.request.Response)): vim.async.Closable
 --- @return vim.async.Closable # Cancels the request or checks its status.
 function M.request(method, url, opts, on_response)
@@ -146,34 +150,45 @@ function M.request(method, url, opts, on_response)
   vim.validate('url', url, function(u)
     return type(u) == 'string' and vim.uri.parse(u) ~= nil
   end, 'URI')
+  ---@cast url string
   vim.validate('opts', opts, 'table', true)
   vim.validate('opts.headers', opts.headers, 'table', true)
-  vim.validate('opts.body', opts.body, function(b)
-    return (b == nil and true) or (type(b) == 'string' and not b:match('^@'))
-  end, true, 'body should be string and not start with @')
+  vim.validate('opts.outpath', opts.outpath, 'string', true)
+  vim.validate('opts.outbuf', opts.outbuf, 'number', true)
+  vim.validate('opts.retry', opts.retry, 'number', true)
+  vim.validate('opts.body', opts.body, 'string', true)
   vim.validate('on_response', on_response, 'function', true)
   ---@cast on_response -vim.net.request.Opts
 
   local retry = opts.retry or 3
   local outbuf = opts.outbuf == 0 and vim.api.nvim_get_current_buf() or opts.outbuf
+  local outpath = opts.outpath and vim.fs.abspath(opts.outpath) -- Absolute in case of :cd.
 
-  -- Build curl command. `--fail`: don't write error response to `outpath`/`outbuf`.
-  local args = { 'curl', '--fail', '--globoff', '--location', '--retry', tostring(retry) }
+  -- Build curl command.
+  -- --disable: (must be first) ignore ".curlrc", which can change the output.
+  -- --fail: don't write error response to `outpath`/`outbuf`.
+  local args =
+    { 'curl', '--disable', '--fail', '--globoff', '--location', '--retry', tostring(retry) }
   vim.list_extend(args, opts.verbose and { '--verbose' } or { '--silent', '--show-error' })
 
-  if opts.outpath then
-    vim.list_extend(args, { '--output', opts.outpath })
+  if outpath then
+    -- --remove-on-error: don't leave a partial file.
+    vim.list_extend(args, { '--output', outpath, '--remove-on-error' })
   end
 
-  -- curl -X HEAD does not work and advises to use --head instead.
-  vim.list_extend(args, method == 'HEAD' and { '--head' } or { '--request', method })
-  -- Output only the body, undecoded (counted by `size_download`), overriding `--head`, ".curlrc".
-  vim.list_extend(args, { '--no-include', '--no-compressed' })
-
-  if vim.list_contains({ 'POST', 'PUT', 'PATCH' }, method) and opts.body then
-    vim.list_extend(args, { '--data-binary', '@-' })
+  local req_body = vim.list_contains({ 'POST', 'PUT', 'PATCH' }, method) and opts.body or nil
+  if method == 'HEAD' then
+    -- curl -X HEAD does not work and advises to use --head instead.
+    -- --no-include: headers are in `header_json`, not the output.
+    vim.list_extend(args, { '--head', '--no-include' })
+  elseif method ~= 'GET' and not (method == 'POST' and req_body) then
+    -- Not for GET, or POST with body (--data-binary): --request also forces the method after a
+    -- 301/302/303 redirect, which should switch to GET.
+    vim.list_extend(args, { '--request', method })
   end
 
+  -- Headers (may contain secrets) go on stdin instead of argv, for security.
+  local header_stdin = {} ---@type string[]
   if opts.headers then
     for key, value in pairs(opts.headers) do
       local values = type(value) == 'table' and value or { value }
@@ -190,30 +205,46 @@ function M.request(method, url, opts, on_response)
           error('headers keys/values must be strings')
         end
 
-        if v == '' then
-          vim.list_extend(args, { '--header', ('%s;'):format(key) })
-        else
-          vim.list_extend(args, { '--header', ('%s: %s'):format(key, v) })
+        if key:find('[\r\n]') or v:find('[\r\n]') then
+          error('headers must not contain CR or LF')
         end
+
+        -- "Key: " would delete the header, "Key;" sends it empty.
+        local header = v:match('^%s*$') and ('%s;'):format(key) or ('%s: %s'):format(key, v)
+        table.insert(header_stdin, header)
       end
     end
   end
 
-  vim.list_extend(
-    args,
-    { '--write-out', '%{header_json}\\n%{response_code} %{size_download}', url }
-  )
+  -- Body is sent via tempfile bc stdin has the headers. Written last, after validation.
+  local body_path ---@type string?
+  if req_body then
+    local tmpl = vim.fs.joinpath(assert(vim.uv.os_tmpdir()), 'nvim.net.XXXXXX')
+    local fd, path = assert(vim.uv.fs_mkstemp(tmpl)) -- Permissions: 0600.
+    assert(vim.uv.fs_write(fd, req_body))
+    vim.uv.fs_close(fd)
+    body_path = path
+    vim.list_extend(args, { '--data-binary', ('@%s'):format(path) })
+  end
 
-  local system_opts = opts.body and { stdin = opts.body } or {}
+  vim.list_extend(args, {
+    '--write-out',
+    '%{header_json}\\n%{response_code} %{size_download}',
+    '--header',
+    '@-',
+    url,
+  })
+
+  local system_opts = { stdin = table.concat(header_stdin, '\n') }
   local closing = false -- close() was called.
-  local on_close = {} --- @type fun()[]
   local job = vim.system(args, system_opts, function(res)
-    for _, f in ipairs(on_close) do
-      f()
+    if body_path then
+      os.remove(body_path)
     end
     vim.schedule(function() -- Deferred so `outbuf` and `on_response` may call non-fast API.
       --- @cast res.stdout -?
-      local status, headers, body = parse_output(res.stdout, not opts.outpath)
+      local killed = closing or res.signal ~= 0 -- If curl is killed: partial output, no trailer.
+      local status, headers, body = parse_output(killed and '' or res.stdout, not outpath)
       local err ---@type string?
       if closing then
         err = 'Request closed'
@@ -232,11 +263,15 @@ function M.request(method, url, opts, on_response)
 
       if not err and outbuf and vim.api.nvim_buf_is_loaded(outbuf) then
         local ok, write_err = pcall(function()
-          local lines = opts.outpath and vim.fn.readfile(opts.outpath, 'b')
-            or vim.split(body, '\n', { plain = true })
-          vim.api.nvim_buf_set_lines(outbuf, 0, -1, true, lines)
+          local text = outpath and vim.fn.readblob(outpath) or body
+          vim.api.nvim_buf_set_lines(outbuf, 0, -1, true, text)
         end)
-        err = not ok and write_err or nil
+        if not ok then
+          err = write_err
+          if not on_response then
+            error(err, 0)
+          end
+        end
       end
       if on_response then
         on_response(err, response)
@@ -245,18 +280,11 @@ function M.request(method, url, opts, on_response)
   end)
 
   return {
-    -- Calls `callback` after the request stops. |vim.async.Closable|
-    --- @param callback? fun()
-    close = function(_, callback)
+    -- Calls `on_close` after the request stops. |vim.async.Closable|
+    --- @param on_close? fun()
+    close = function(_, on_close)
       closing = true
-      if job:is_closing() then -- Stopped already.
-        if callback then
-          callback()
-        end
-        return
-      end
-      on_close[#on_close + 1] = callback
-      job:kill('sigint')
+      job:close(on_close)
     end,
     -- Returns true if close() was called, or the request stopped.
     is_closing = function()

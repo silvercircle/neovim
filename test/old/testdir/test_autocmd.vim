@@ -389,6 +389,37 @@ func Test_WinNewPre()
   unlet g:caught
 endfunc
 
+" After an interrupt() from a timer callback in a "WinNew" autocommand,
+" typing on the command line must be visible. #10631
+func Test_interrupt_after_WinNew()
+  CheckRunVimInTerminal
+
+  let lines =<< trim END
+    vim9script
+    def Interrupt()
+      writefile(['fired'], 'Xinterrupt_fired')
+      silent interrupt()
+    enddef
+    autocmd WinNew * timer_start(0, (_) => Interrupt())
+  END
+  call writefile(lines, 'Xtest_interrupt_winnew', 'D')
+  call delete('Xinterrupt_fired')
+  let buf = RunVimInTerminal('-S Xtest_interrupt_winnew', {'rows': 8})
+
+  call term_sendkeys(buf, "\<C-W>s")
+  call WaitFor({-> filereadable('Xinterrupt_fired')})
+  call TermWait(buf, 200)
+  call term_sendkeys(buf, ':echo')
+  call WaitForAssert({-> assert_match(':echo', join(map(range(1, 8),
+        \ {_, n -> term_getline(buf, n)}), "\n"))})
+  call term_sendkeys(buf, " 'typed'\<CR>")
+  call WaitForAssert({-> assert_match('typed', join(map(range(1, 8),
+        \ {_, n -> term_getline(buf, n)}), "\n"))})
+
+  call StopVimInTerminal(buf)
+  call delete('Xinterrupt_fired')
+endfunc
+
 func Test_WinResized()
   CheckRunVimInTerminal
 
@@ -4115,6 +4146,33 @@ func Test_v_event_nested()
   call assert_equal(2, len(g:Xinner))
   call assert_match('Xveventdir$', g:Xinner[0].directory)
   unlet g:Xouter g:Xinner
+endfunc
+
+" Garbage collection in a nested autocommand that uses v:event must not free
+" the values of v:event of the outer autocommand.  This used freed memory,
+" which is only reliably detected with valgrind or ASan.
+func s:YankThenChangeDir()
+  call add(g:Xregs, copy(v:event.regcontents))
+  let olddir = getcwd()
+  cd Xveventgcdir
+  exe 'cd ' .. fnameescape(olddir)
+  call add(g:Xregs, copy(v:event.regcontents))
+  call add(g:Xregs, v:event.operator)
+endfunc
+
+func Test_v_event_nested_garbagecollect()
+  call mkdir('Xveventgcdir', 'R')
+  let g:Xregs = []
+  autocmd TextYankPost * ++nested call s:YankThenChangeDir()
+  autocmd DirChangedPre * call test_garbagecollect_now()
+  new
+  call setline(1, 'line one')
+  normal! yy
+  au! TextYankPost
+  au! DirChangedPre
+  bwipe!
+  call assert_equal([['line one'], ['line one'], 'y'], g:Xregs)
+  unlet g:Xregs
 endfunc
 
 " Test for ModeChanged pattern

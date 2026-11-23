@@ -7,7 +7,8 @@ local exec_lua = n.exec_lua
 
 -- Serve one request per status (default "200 OK") and record what curl sent.
 ---@param status? string|string[]
-local function http_server(body, status)
+---@param length? integer Content-Length (default: `#body`).
+local function http_server(body, status, length)
   t.skip(n.fn.executable('curl') == 0, 'curl not found')
   return exec_lua(function()
     vim.env.no_proxy = '127.0.0.1'
@@ -43,12 +44,12 @@ local function http_server(body, status)
         client:read_stop()
         local method = data:match('^(%S+)')
         _G.http_request = { method = method, headers = headers, body = request_body, raw = data }
-        local response = ('HTTP/1.1 %s\r\nContent-Length: %d\r\nSet-Cookie: a=1\r\nSet-Cookie: b=2\r\nConnection: close\r\n\r\n%s'):format(
+        local response_head = ('HTTP/1.1 %s\r\nContent-Length: %d\r\nSet-Cookie: a=1\r\nSet-Cookie: b=2\r\nConnection: close\r\n\r\n'):format(
           client_status,
-          #body,
-          method == 'HEAD' and '' or body
+          length or #body
         )
-        client:write(response, function(write_err)
+        -- Body is not format()ed: PUC Lua 5.1 "%s" truncates at NUL.
+        client:write({ response_head, method == 'HEAD' and '' or body }, function(write_err)
           assert(not write_err, write_err)
           client:close()
         end)
@@ -165,6 +166,11 @@ describe('vim.net.request', function()
     t.matches('404', result.error)
     t.eq(nil, vim.uv.fs_stat(outpath))
 
+    -- A partial (failed) download is removed from `outpath`.
+    result = request('GET', http_server('ab', nil, 100), { outpath = outpath })
+    t.matches('^curl: %(18%)', result.error)
+    t.eq(nil, vim.uv.fs_stat(outpath))
+
     -- curl rejects a malformed URL.
     result = request('GET', 'http://127.0.0.1/a b')
     t.eq(nil, result.response)
@@ -257,7 +263,8 @@ describe('vim.net.request', function()
   end)
 
   it('writes response to `outbuf`', function()
-    local url = http_server('<html>test</html>', { '200 OK', '200 OK', '200 OK' })
+    local body = '<html>\0</html>\n'
+    local url = http_server(body, { '200 OK', '200 OK', '200 OK', '200 OK' })
 
     local content = exec_lua(function()
       ---@type string[]
@@ -279,27 +286,29 @@ describe('vim.net.request', function()
 
       return { lines, vim.api.nvim_buf_get_lines(other, 0, -1, true) }
     end)
-    t.eq({ '<html>test</html>' }, content[1])
+    t.eq({ '<html>\0</html>' }, content[1])
     t.eq({ 'unrelated text' }, content[2])
 
-    -- Writes both `outpath` and `outbuf`.
+    -- Writes both `outpath` (relative to CWD at request time) and `outbuf`.
     local outpath = t.tmpname(false)
     t.eq(
-      { '<html>test</html>' },
+      { '<html>\0</html>' },
       exec_lua(function()
         local done = false
-        vim.net.request(url, { outpath = outpath, outbuf = 0 }, function()
+        vim.cmd.cd(vim.fs.dirname(outpath))
+        vim.net.request(url, { outpath = vim.fs.basename(outpath), outbuf = 0 }, function()
           done = true
         end)
+        vim.cmd.cd('-')
         vim.wait(2000, function()
           return done
         end)
         return vim.api.nvim_buf_get_lines(0, 0, -1, true)
       end)
     )
-    t.eq('<html>test</html>', t.read_file(outpath))
+    t.eq(body, t.read_file(outpath))
 
-    -- A failed `outbuf` write is passed to `on_response`.
+    -- A failed `outbuf` write is passed to `on_response`, else raised.
     t.matches(
       "not 'modifiable'",
       exec_lua(function()
@@ -314,30 +323,31 @@ describe('vim.net.request', function()
         return rv
       end)
     )
+    exec_lua(function()
+      vim.net.request(url, { outbuf = 0 })
+    end)
+    t.retry(nil, 2000, function()
+      t.matches("not 'modifiable'", n.eval('v:errmsg'))
+    end)
   end)
 
   it('works with :read', function()
-    t.skip(skip_integ, 'NVIM_TEST_INTEG not set (network integration test)')
-
-    local content = exec_lua(function()
-      vim.cmd('runtime plugin/net.lua')
-      ---@type string[]
-      local lines
-
-      vim.api.nvim_buf_set_lines(0, 0, -1, false, { 'Here is some text' })
-      vim.cmd(':read https://example.com')
-
-      vim.wait(2000, function()
-        lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-        return #lines > 1
+    local url = http_server('line1\nline2\n')
+    t.eq(
+      { 'a', 'line1', 'line2', 'b' },
+      exec_lua(function()
+        vim.cmd('runtime plugin/net.lua')
+        vim.api.nvim_buf_set_lines(0, 0, -1, true, { 'a', 'b' })
+        local buf = vim.api.nvim_get_current_buf()
+        vim.cmd(('1read %s'):format(url))
+        -- Switch buffers before the response arrives.
+        vim.cmd.enew()
+        vim.wait(2000, function()
+          return vim.api.nvim_buf_line_count(buf) > 2
+        end)
+        return vim.api.nvim_buf_get_lines(buf, 0, -1, true)
       end)
-
-      return lines
-    end)
-
-    t.eq(true, content ~= nil)
-    t.eq(true, content[1]:find('Here') ~= nil)
-    t.eq(true, content[2]:find('html') ~= nil)
+    )
   end)
 
   it('opens remote tar.gz URLs as tar archives', function()
@@ -372,9 +382,9 @@ describe('vim.net.request', function()
     local fixture =
       vim.fs.joinpath(t.paths.test_source_path, 'test/functional/fixtures/zip/browser.zip')
     local rv = exec_lua(function(path)
-      vim.net.request = function(_, opts, callback)
+      vim.net.request = function(_, opts, on_response)
         assert(vim.uv.fs_copyfile(path, opts.outpath))
-        vim.schedule(callback)
+        vim.schedule(on_response)
       end
       -- The query is not part of the path (see |vim.Uri|).
       vim.cmd.edit({ 'https://example.com/browser.zip?raw=1', magic = { file = false } })
@@ -425,12 +435,29 @@ describe('vim.net.request', function()
   end)
 
   it('accepts custom headers', function()
+    local url = http_server('hello')
+    exec_lua(function()
+      local system = vim.system
+      vim.system = function(cmd, opts, ...) -- Record what curl gets.
+        _G.curl = { cmd = cmd, stdin = opts.stdin }
+        for i, arg in ipairs(cmd) do
+          if cmd[i - 1] == '--data-binary' then
+            _G.curl.body_path = arg:sub(2)
+            _G.curl.body = vim.fn.readblob(arg:sub(2))
+          end
+        end
+        return system(cmd, opts, ...)
+      end
+    end)
     ---@type table
-    local result = request('GET', http_server('hello'), {
+    local result = request('POST', url, {
+      body = 'a\0b',
       headers = {
         Authorization = 'Bearer test-token',
         ['X-Custom-Header'] = 'custom-value',
+        ['X-Quote'] = 'a"b\\c',
         ['Empty'] = '',
+        ['Blank'] = ' ',
         ['X-Multi'] = { 'a', 'b' },
       },
     })
@@ -440,7 +467,53 @@ describe('vim.net.request', function()
     local headers = exec_lua('return http_request.headers')
     t.eq('Bearer test-token', headers.authorization, 'Expected Authorization header')
     t.eq('custom-value', headers['x-custom-header'], 'Expected X-Custom-Header')
+    t.eq('a"b\\c', headers['x-quote'])
     t.eq('', headers.empty, 'Expected Empty header')
+    t.eq('', headers.blank)
+    t.eq('a\0b', exec_lua('return http_request.body'))
+
+    -- Assert the full curl argv.
+    -- - Headers (secrets) are sent via stdin, not argv, for security.
+    -- - Body is sent via tempfile.
+    local curl = exec_lua('return _G.curl')
+    local stdin = vim.split(curl.stdin, '\n')
+    table.sort(stdin)
+    t.eq({
+      cmd = {
+        'curl',
+        '--disable',
+        '--fail',
+        '--globoff',
+        '--location',
+        '--retry',
+        '3',
+        '--silent',
+        '--show-error',
+        '--data-binary',
+        ('@%s'):format(curl.body_path),
+        '--write-out',
+        '%{header_json}\\n%{response_code} %{size_download}',
+        '--header',
+        '@-',
+        url,
+      },
+      stdin = {
+        'Authorization: Bearer test-token',
+        'Blank;',
+        'Empty;',
+        'X-Custom-Header: custom-value',
+        'X-Multi: a',
+        'X-Multi: b',
+        'X-Quote: a"b\\c',
+      },
+      body = 'a\0b',
+      body_removed = true,
+    }, {
+      cmd = curl.cmd,
+      stdin = stdin,
+      body = curl.body,
+      body_removed = vim.uv.fs_stat(curl.body_path) == nil,
+    })
   end)
 
   it('accepts multiple HTTP methods', function()
@@ -481,6 +554,15 @@ describe('vim.net.request', function()
     t.eq('POST', sent.method)
     t.eq('application/json', sent.headers['content-type'])
     t.eq('{"a": 1}', sent.body)
+
+    -- A body starting with "@" is not a filename.
+    request('POST', http_server('hello'), { body = '@a' })
+    t.eq('@a', exec_lua('return http_request.body'))
+
+    -- A 303 redirect switches POST to GET.
+    local redirect = '303 See Other\r\nLocation: /done' -- Status line + header.
+    result = request('POST', http_server('done', { redirect, '200 OK' }), { body = 'a=1' })
+    t.eq({ 'done', 'GET' }, { result.response.body, exec_lua('return http_request.method') })
   end)
 
   it('validation', function()
@@ -524,7 +606,12 @@ describe('vim.net.request', function()
       end)
     )
 
+    assert_wrong_request('opts.outbuf: expected number, got string', { outbuf = 'x' })
     assert_wrong_request('headers keys/values must be strings', { headers = { Header = 123 } })
+    assert_wrong_request(
+      'headers must not contain CR or LF',
+      { headers = { ['X-Name'] = 'a\r\nAuthorization: Bearer evil' } }
+    )
     assert_wrong_request(
       'headers keys/values must be strings',
       { headers = { Header = { a = 'b' } } }
@@ -547,18 +634,9 @@ describe('vim.net.request', function()
     )
 
     -- body asserts
-    assert_wrong_request(
-      'opts.body: expected body should be string and not start with @',
-      { body = 123 }
-    )
-    assert_wrong_request(
-      'opts.body: expected body should be string and not start with @',
-      { body = {} }
-    )
-    assert_wrong_request(
-      'opts.body: expected body should be string and not start with @',
-      { body = '@test' }
-    )
+    assert_wrong_request('opts.body: expected string, got number', { body = 123 })
+    assert_wrong_request('opts.body: expected string, got table', { body = {} })
+    assert_wrong_request('opts.retry: expected number, got table', { retry = {} })
 
     -- OPTIONS is not accepted
     assert_wrong_request(
