@@ -164,6 +164,8 @@ describe('messages2', function()
       foo{6: [+1]}                           1,1            All|
     ]])
     -- Don't enter the pager in insert mode.
+    -- Also checks that "messagesopt=pager:…" is normalized to the keytrans() form.
+    command('set messagesopt+=pager:<cr>')
     command('tabonly | call nvim_echo([["foo\n"]]->repeat(&lines), 1, {}) | startinsert')
     screen:expect([[
       ^x                                                    |
@@ -190,8 +192,6 @@ describe('messages2', function()
       foo{6: [+9]}                                             |
     ]])
     -- Do enter the pager in normal mode (with keybinding setup).
-    -- Also checks that "messagesopt=pager:…" is normalized to the keytrans() form.
-    command('set messagesopt+=pager:<cr>')
     command('nmap <Esc> <Cmd>fclose<CR>')
     feed('<CR>')
     screen:expect([[
@@ -453,6 +453,22 @@ describe('messages2', function()
       {1:~                                                    }|*12
       hello                                                |
     ]])
+    -- Prompt is visible from command entered below expanded message. #42116
+    feed(':call confirm("Ok?")')
+    screen:expect([[
+                                                           |
+      {1:~                                                    }|*11
+      hello                                                |
+      {16::}{15:call} {25:confirm}{16:(}{26:"Ok?"}{16:)}^                                 |
+    ]])
+    feed('<CR>')
+    screen:expect([[
+                                                           |
+      {1:~                                                    }|*10
+      hello                                                |
+      {6:Ok?}                                                  |
+      {6:[O]k: }^                                               |
+    ]])
   end)
 
   it('no prompt and newlines with Visual filter command #38273', function()
@@ -686,14 +702,49 @@ describe('messages2', function()
     ]])
   end)
 
-  it('pager key enters pager from Normal mode in terminal buffer', function()
+  it('pager key in Insert/Replace/Terminal mode', function()
     command('set messagesopt+=pager:<CR>')
-    api.nvim_open_term(0, {})
-    t.eq('nt', api.nvim_get_mode().mode)
-    feed([[:echo "foo\n"->repeat(&lines)<CR>]])
-    feed('<CR>')
-    n.poke_eventloop()
-    t.eq('pager', api.nvim_get_option_value('filetype', { buf = 0 }))
+    local function expand_feed(keys)
+      api.nvim_echo({ { ('foo\n'):rep(14) } }, true, {})
+      feed(keys)
+    end
+    local function eq_state(mode, ft)
+      t.retry(nil, 1000, function()
+        t.eq({ mode, ft }, { api.nvim_get_mode().mode, n.eval('&ft') })
+      end)
+    end
+    exec_lua(function()
+      _G.input = ''
+      vim.api.nvim_open_term(0, {
+        on_input = function(_, _, _, data)
+          _G.input = _G.input .. data
+        end,
+      })
+    end)
+    -- Terminal mode: the key goes to the job; a click enters the pager, without <Esc> to the job.
+    command('startinsert')
+    expand_feed('<CR>')
+    eq_state('t', '')
+    expand_feed('<LeftMouse><0,13>')
+    eq_state('n', 'pager')
+    t.eq('\r', exec_lua('return _G.input'))
+    -- Terminal-Normal mode: enters the pager.
+    command('wincmd p')
+    expand_feed('<CR>')
+    eq_state('n', 'pager')
+    -- CTRL-O from Insert mode: the key is the command. "g<" enters the pager in Normal mode.
+    command('wincmd p | enew | call setline(1, ["a", "b"]) | startinsert')
+    feed('<C-O>')
+    expand_feed('<CR>')
+    eq_state('i', '')
+    t.eq(2, n.fn.line('.'))
+    feed('<C-O>g<lt>')
+    eq_state('n', 'pager')
+    -- Replace mode: the key is inserted.
+    command('wincmd p | startreplace')
+    expand_feed('<CR>')
+    eq_state('R', '')
+    t.eq(3, n.fn.line('$'))
   end)
 
   it('paging prompt dialog #35191', function()

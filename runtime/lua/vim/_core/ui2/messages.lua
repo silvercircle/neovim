@@ -237,6 +237,12 @@ local function pager_shown()
   return api.nvim_win_is_valid(ui.wins.pager) and not api.nvim_win_get_config(ui.wins.pager).hide
 end
 
+--- True if current mode is Insert/Replace/Terminal mode, or a CTRL-O cmd ("niI", "ntT").
+local function insert_mode()
+  local mode = api.nvim_get_mode().mode
+  return (mode:find('^[iRt]') or mode:find('^n[it].')) ~= nil
+end
+
 ---@type vim.api.keyset.set_extmark
 local hlopts = { undo_restore = false, invalidate = true, priority = 1, strict = false }
 --- Move messages to expanded cmdline, dialog or pager to show in full.
@@ -349,7 +355,7 @@ function M.show_msg(tgt, kind, content, replace_last, append, id)
     elseif tgt == 'cmd' and dupe == 0 then
       fn.clearmatches(ui.wins.cmd) -- Clear matchparen highlights.
       if ui.cmd.srow > 0 then
-        -- In block mode the cmdheight is already dynamic, so just print the full message
+        -- In block mode the cmdline height is already dynamic, so just print the full message
         -- regardless of height. Put cmdline below message.
         ui.cmd.srow = row + 1
       else
@@ -641,7 +647,7 @@ local function cmd_on_key(key, typed)
 
   -- Check if window was entered and reopen with original config. A shown (but not entered)
   -- pager is dismissed instead; "g<" passes through to reopen and enter it.
-  local can_enter = not api.nvim_get_mode().mode:match('^[it]') and not pager_shown()
+  local can_enter = not insert_mode() and not pager_shown()
   local enter = can_enter and (typed == mopt.pager or typed_g and (typed == '<lt>' or key == '<'))
     or (typed:find('LeftMouse') and fn.getmousepos().winid == ui.wins.cmd)
   if enter then
@@ -723,10 +729,11 @@ end
 
 local function enter_pager()
   in_pager = true
-  if M.cmd_on_key then
-    api.nvim_feedkeys(vim.keycode('<Esc>'), 'tn', false)
+  -- Cancel pending cmd (e.g. "g" of "g<"), leave the current mode.
+  if M.cmd_on_key or insert_mode() then
+    api.nvim_feedkeys(vim.keycode([[<C-\><C-N>]]), 'tn', false)
   end
-  -- Schedule: the fed <Esc> above is processed one event iteration later.
+  -- Schedule: the fed <C-\><C-N> is processed one event iteration later.
   vim.schedule(function()
     if not api.nvim_win_is_valid(ui.wins.pager) then
       return -- Pager was already closed somehow.
