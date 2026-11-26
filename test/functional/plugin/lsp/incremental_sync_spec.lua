@@ -243,6 +243,14 @@ describe('incremental synchronization', function()
       }
       test_edit({ 'hello', 'world' }, { 'ggdG' }, expected_text_changes, 'utf-16', '\n')
     end)
+    it('deleting the last line when the first line is empty #36653', function()
+      local range = { start = { line = 1, character = 0 }, ['end'] = { line = 2, character = 0 } }
+      test_edit({ '', 'foo' }, { 'Gdd' }, { { range = range, rangeLength = 4, text = '' } })
+    end)
+    it('deleting the first line when the last line is empty #36653', function()
+      local range = { start = { line = 0, character = 0 }, ['end'] = { line = 1, character = 0 } }
+      test_edit({ 'foo', '' }, { 'ggdd' }, { { range = range, rangeLength = 4, text = '' } })
+    end)
     it('deleting an empty line', function()
       local expected_text_changes = {
         {
@@ -754,14 +762,3 @@ describe('incremental synchronization', function()
     end)
   end)
 end)
-
--- TODO(mjlbach): Add additional tests
--- deleting single lone line
--- 2 lines -> 2 line delete -> undo -> redo
--- describe('future tests', function()
---   -- This test is currently wrong, ask bjorn why dd on an empty line triggers on_lines
---   it('deleting an empty line', function()
---     local expected_text_changes = {{ }}
---     test_edit({""}, {"ggdd"}, expected_text_changes, 'utf-16', '\n')
---   end)
--- end)
